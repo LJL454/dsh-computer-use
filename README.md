@@ -270,6 +270,12 @@ node verify-disposer-contract.mjs
 
 ---
 
+## 致谢
+
+- [@duolegemiao](https://github.com/duolegemiao)（堕喵）—— [dsh-volume-bar](https://github.com/duolegemiao/dsh-volume-bar) 的作者，本插件的协作维护者。
+
+---
+
 ## 许可
 
 MIT © LJL454
