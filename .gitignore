@@ -1,0 +1,32 @@
+# Build and packaging output
+dist/
+*.zip
+*.tgz
+
+# 发布归档的暂存目录：里面是 `*-github.zip` 与它的校验和，属于 Release 附件，不进仓库。
+# 校验和本身也跟着归档走——单独提交一个"指向仓库里并不存在的文件"的 sha256 只会让人困惑。
+_zips/
+*.zip.sha256.txt
+
+# Test and diagnostic run output
+artifacts/
+*.out.txt
+*.post.txt
+*.round2.txt
+*.final.txt
+last-run.json
+pacing-*.json
+stability-probe-*.json
+
+# Diagnostics that write into the tree
+tree-managed.txt
+tree-com.txt
+tree-*.htm
+_live-out.txt
+*.tmp
+
+# Caches written by the tooling
+.cache-baseline-schema.json
+
+# Never in the repo
+node_modules/

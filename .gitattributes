@@ -1,0 +1,14 @@
+# 行尾不做任何转换。
+#
+# 为什么这条必须有：Git for Windows 在系统级配置里默认 `core.autocrlf=true`
+# （`C:/Program Files/Git/etc/gitconfig`），于是 git 会把仓库里的行尾统一成 LF、检出时再
+# 换回 CRLF。这个插件不能接受这种改写：
+#
+#   * `backend/worker.ps1` 是由 `backend/parts/*.ps1` 拼接生成的，`tools/build-worker.mjs
+#     --check` 逐字节比对两者，安装时宿主还会再校验一次；
+#   * 发布包的 SHA256 是逐文件核对过的，"clone 下来的字节"和"zip 里的字节"必须是同一份。
+#
+# `-text` 让 git 原样存取每个文件的字节，任何人 clone 都一样，与他自己机器的 autocrlf 无关。
+# 代价是 `git diff` 会把它们当二进制（只显示 "Binary files differ"）。如果更想要逐行 diff、
+# 愿意接受行尾被规范化，把这一行改成 `* text=auto` 即可。
+* -text

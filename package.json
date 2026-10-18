@@ -1,0 +1,93 @@
+{
+  "name": "@local/dsh-computer-use",
+  "version": "1.39.5",
+  "license": "MIT",
+  "author": "LJL454 <134773405+LJL454@users.noreply.github.com>",
+  "type": "module",
+  "description": "电脑操作 (computer use) capability for DeepSeek Harness: screenshot, mouse, keyboard, clipboard, app launch, window and UI Automation tools, batched actions, coded failures, plus a 电脑操作 toggle chip in the composer tool row.",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-slots"
+      ]
+    },
+    "manifestVersion": 1
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "doctor.mjs",
+    "INSTALL.md",
+    "backend",
+    "browser",
+    "internal",
+    "cordis.patch.yml",
+    "live-tool-test.mjs",
+    "schema-test.mjs",
+    "harness-test.mjs",
+    "client-smoke.mjs",
+    "lifecycle-test.mjs",
+    "task-eval.mjs",
+    "pacing-test.mjs",
+    "stability-probe.mjs",
+    "wait-and-capture-test.mjs",
+    "coordinate-contract-test.mjs",
+    "host-runtime-test.mjs",
+    "browser-connection-test.mjs",
+    "deadline-test.mjs",
+    "batch-progress-test.mjs",
+    "managed-find-test.mjs",
+    "stop-report-test.mjs",
+    "attachment-state-test.mjs",
+    "build-cache-test.mjs",
+    "traversal-budget-test.mjs",
+    "com-scope-test.mjs",
+    "lease-test.mjs",
+    "token-guard-test.mjs",
+    "test-schema-visibility.mjs",
+    "merge-mount-test.mjs",
+    "app-candidates-test.mjs",
+    "compile-check.ps1",
+    "engine-ab.mjs",
+    "real-tools-probe.mjs",
+    "bench.mjs",
+    "probe.mjs",
+    "probe-uia.mjs",
+    "probe-launch.mjs",
+    "probe-text.mjs",
+    "diag-*.mjs",
+    "uia-diag.mjs",
+    "survey-uia.mjs",
+    "capture-format-probe.ps1",
+    "cleanup-test-windows.mjs",
+    "tests",
+    "tools"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-scope": "*",
+    "@deepseek-ai/dsh-tools": "*"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-scope": {
+      "optional": false
+    },
+    "@deepseek-ai/dsh-tools": {
+      "optional": false
+    }
+  },
+  "license": "MIT"
+}
