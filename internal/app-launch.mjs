@@ -12,7 +12,6 @@
  *
  * 所有实际工作都在 ./app-launch.js 里，便于脱离 Cordis 单测。
  */
-import { defineTool as definePlainTool } from '@deepseek-ai/dsh-tools';
 import { ELECTRON_SENSITIVE_VARS, auditEnvironment, envReport, launchApp } from './app-launch.js';
 
 const DEFAULTS = {
@@ -41,7 +40,14 @@ export function applyAppLaunch(ctx, config = {}, options = {}) {
     ctx.logger?.info?.('computer-use/app-launch: disabled by config');
     return undefined;
   }
-  const define = typeof options.defineTool === 'function' ? options.defineTool : definePlainTool;
+  // `defineTool` 不再从宿主包里静态 import：`link:` 安装时 Node 从插件目录往上找，
+  // 找不到应用里的那份，整个模块图会在加载阶段就失败（见 internal/host-packages.mjs）。
+  // 主插件解析好之后通过 options 传进来；没有就不挂这两个工具，而不是把整行拖垮。
+  const define = options.defineTool;
+  if (typeof define !== 'function') {
+    ctx.logger?.warn?.('computer-use/app-launch: no defineTool was supplied; app_launch and app_env_audit stay off');
+    return undefined;
+  }
   const extraStrip = (settings.stripVars ?? []).filter((name) => !ELECTRON_SENSITIVE_VARS.includes(name));
   const audit = auditEnvironment(process.env, extraStrip);
   if (audit.sessionIsPolluted) {

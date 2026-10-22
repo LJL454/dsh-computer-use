@@ -11,7 +11,7 @@
  * user turns on for one conversation and can turn off again, which is exactly
  * what the chip in the composer expresses.
  */
-import { defineTool } from '@deepseek-ai/dsh-tools';
+import { importHostModule, describeHostEntry } from './internal/host-packages.mjs';
 import { createHash, randomBytes } from 'node:crypto';
 import { mkdirSync, readFileSync, lstatSync } from 'node:fs';
 import { mkdir, readFile, rm } from 'node:fs/promises';
@@ -95,6 +95,16 @@ import {
 } from './internal/tool-contracts.mjs';
 import { createSchemaVisibility } from './internal/schema-visibility.mjs';
 import { collectDoctorReport } from './internal/doctor.mjs';
+
+/**
+ * 宿主自带的 `defineTool`，按**绝对路径**解析后取用。
+ *
+ * 不能写成静态 `import ... from '@deepseek-ai/dsh-tools'`：`dsh plugin add` 用的是 `link:`，
+ * 模块位于解压目录（`D:\DSH-Plugins\...`），Node 会从那里逐级向上找 `node_modules`，永远
+ * 找不到应用里那份；整行随之导入失败，宿主本身却一切正常——用户看到的只是"装好了，但输入框
+ * 里没有「电脑操作」按钮"，没有任何报错。解析策略见 internal/host-packages.mjs。
+ */
+const { defineTool } = await importHostModule('@deepseek-ai/dsh-tools');
 
 /** Stable Loader identity. */
 export const name = 'computer-use';

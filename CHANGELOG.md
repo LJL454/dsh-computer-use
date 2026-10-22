@@ -25,8 +25,38 @@ Stored attachment metadata does not match its reference.   (code: UNKNOWN)
 `mediaType` 改成落盘对象的真实格式（看对象头魔数：`89 50 4E 47`=PNG、
 `52 49 46 46 … 57 45 42 50`=WebP、`FF D8 FF`=JPEG），或弃用该会话。
 
+**修复：以 `link:` 安装后没有「电脑操作」按钮。**
+
+`dsh plugin add` 装出来的是 `link:`，模块留在解压目录（例如 `D:\DSH-Plugins\...`）。插件过去
+用静态 `import '@deepseek-ai/dsh-tools'` 取 `defineTool`，Node 会从那个目录逐级向上找
+`node_modules` —— 应用自带的包在 `<app>\resources\app\dsh\node_modules`，不在这条路径上，
+于是整行导入失败：
+
+```
+dsh: warning: 1 entry did not activate
+computer-use (@local/dsh-computer-use): failed to import: Error [ERR_MODULE_NOT_FOUND]:
+Cannot find package '@deepseek-ai/dsh-tools' imported from D:\DSH-Plugins\...
+```
+
+宿主本身一切正常（`tools` 行是它自己的），所以界面上只有"装好了但没有芯片"，没有任何报错。
+过去的临时办法是往插件目录里塞一份宿主同版本的 `dsh-tools` / `cordis` / `dsh-llm` /
+`dsh-sandbox` / `dsh-scope`，但那是把宿主版本抄进插件，升级必然错位。
+
+- 新增 `internal/host-packages.mjs`：先按普通说明符解析（装在 profile 里时正确），失败则按
+  **运行中应用的绝对路径**导入 `<exe>\resources\app\dsh\node_modules\@deepseek-ai\...`。
+  以文件 URL 导入入口后，它自己的依赖（`dsh-llm`、`cordis`、`dsh-sandbox`…）由 Node 从应用
+  目录解析，所以插件旁边**不需要任何 node_modules 副本**。
+- `index.js`：静态 import 改为顶层 `await importHostModule('@deepseek-ai/dsh-tools')`。
+- `internal/app-launch.mjs`：不再自己 import `defineTool`，改用主插件传入的那份；缺失时只关掉
+  `app_launch` / `app_env_audit` 两个工具，不再拖垮整行。
+- `internal/schema-visibility.mjs` 的 `dsh-scope` 解析本来就是 try/catch 降级，保持不动。
+
+验证：把包解压到一个**没有 node_modules** 的目录、以 `link:` 装进干净 profile —— 修复前
+`/computer-use/status` 返回 404（行未激活），修复后返回 200 且 `registrationFailures: 0`。
+
 **安装入口**：新增 `setup.mjs`（一条命令完成安装 + 清理 + 复核）、`install-and-repair.cmd`
 与 `fix-profile-links.cmd`（双击即可）。
+
 
 ## 1.40.1 — 2026-10-22
 

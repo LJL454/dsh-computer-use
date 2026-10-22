@@ -17,22 +17,28 @@ node setup.mjs
 常用参数：`--profile web`、`--check`（只看不改）、`--app <目录>`（DSH 不在默认位置）。
 不想敲命令就双击 `install-and-repair.cmd`，效果相同。
 
+以 `link:` 安装、插件解压目录在别处（`D:\DSH-Plugins\...` 之类）也**不需要**在插件旁边放任何
+`node_modules`：宿主自带的包按运行中应用的绝对路径解析，见下面的 1.40.2 第三条。
+
 > 为什么不能"加进插件就自动跑"：pnpm 对 `link:` 依赖**不执行任何生命周期脚本**
 > （`preinstall` / `install` / `postinstall` / `prepare` 四个都实测过，一个都没跑），
 > 所以安装动作只能是一条命令或一个双击文件。
 
-版本 **1.40.2**。本版修两个会让 DSH 直接不可用的问题，都不需要用户理解内部机制：
+版本 **1.40.2**。本版修三个会让能力"看起来装了却用不了"的问题：
 
-* **1.40.1 — 装完起不来**：旧版把 `@deepseek-ai/dsh-tools` 声明成 `optional: false` 的 peer，
+* **装完起不来**：旧版把 `@deepseek-ai/dsh-tools` 声明成 `optional: false` 的 peer，
   包管理器因此往 profile 里落一份实体副本；宿主的 `tools` 行优先从 profile 解析，版本一旦
   不一致就被 loader 禁用，全体注入 `tools` 的 row 挂起，`agent-loop` 是 required → 启动失败，
-  弹窗还不点名任何插件。现在删掉该 peer，宿主统一用安装目录自带的那份（实测：profile 里没有
-  该包时插件照常加载、工具照常注册）。
-* **1.40.2 — 一次截图写死会话**：宿主的附件归一化会把超限 PNG 重编码成 WebP，而插件过去把
-  **入参**的 `mediaType` 写进会话记录，形成"PNG 标签 + WebP 实体"。宿主每轮重放历史时按字节
-  复核，判 `ATTACHMENT_CORRUPT`，该会话此后每一轮都在 step 1 失败。现在 `admitCapture()`
-  整条 ref 透传（`mediaType` / `bytes` / `width` / `height` / `originalDimensions` 同源），
-  `IMAGE_VALUE_SCHEMA` 相应放行 `originalDimensions`，并加了会咬人的回归测试。
+  弹窗还不点名任何插件。现在删掉该 peer，宿主统一用安装目录自带的那份。
+* **一次截图写死会话**：宿主的附件归一化会把超限 PNG 重编码成 WebP，而插件过去把**入参**的
+  `mediaType` 写进会话记录，形成"PNG 标签 + WebP 实体"。宿主每轮重放历史时按字节复核，判
+  `ATTACHMENT_CORRUPT`，该会话此后每一轮都在 step 1 失败。现在 `admitCapture()` 整条 ref
+  透传（`mediaType` / `bytes` / `width` / `height` / `originalDimensions` 同源），
+  `IMAGE_VALUE_SCHEMA` 放行 `originalDimensions`，并加了会咬人的回归测试。
+* **`link:` 安装后没有「电脑操作」按钮**：静态 `import '@deepseek-ai/dsh-tools'` 会从解压目录
+  逐级向上找 `node_modules`，永远找不到应用自带的那份，整个 row 静默不激活——宿主正常，界面
+  里就是没有芯片、没有路由。现在改用 `internal/host-packages.mjs`：先按普通说明符解析，失败
+  就按运行中应用的绝对路径导入，它自己的依赖由 Node 从应用目录解析，插件旁边**不需要副本**。
 
 1.40.0 的内容（重复挂载拒绝、`engines.dsh`、`doctor` 离线/在线分层、全发行 `releaseBuildId`、
 预设拆包等）见 [CHANGELOG.md](CHANGELOG.md)。
