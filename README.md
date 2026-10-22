@@ -18,7 +18,9 @@ node setup.mjs
 不想敲命令就双击 `install-and-repair.cmd`，效果相同。
 
 以 `link:` 安装、插件解压目录在别处（`D:\DSH-Plugins\...` 之类）也**不需要**在插件旁边放任何
-`node_modules`：宿主自带的包按运行中应用的绝对路径解析，见下面的 1.40.2 第三条。
+`node_modules`：宿主自带的包按运行中应用的绝对路径解析，见下面的 1.40.2 第三条。解压位置本身
+不受限制——空格、中文、`#`、深层 Downloads 目录都实测过；`/computer-use/status` 的
+`runtime.host.hostPackages` 会直接写出当前用的是哪一份、什么版本。
 
 > 为什么不能"加进插件就自动跑"：pnpm 对 `link:` 依赖**不执行任何生命周期脚本**
 > （`preinstall` / `install` / `postinstall` / `prepare` 四个都实测过，一个都没跑），

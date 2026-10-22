@@ -40,6 +40,16 @@ const ENTRIES = {
 export function candidateHostRoots() {
   const roots = [];
   const add = (path) => { if (path && !roots.includes(path)) roots.push(path); };
+
+  // The process command line is the most direct evidence: the host is started either as
+  //   <app>\resources\app\dsh\node_modules\@deepseek-ai\dsh-desktop-host\lib\index.js
+  // or through ...\dsh-desktop-host\lib\cli.js — both live inside the app's node_modules.
+  for (const arg of process.argv) {
+    if (typeof arg !== 'string') continue;
+    const index = arg.replace(/\//g, '\\').toLowerCase().indexOf('\\resources\\app\\dsh\\node_modules');
+    if (index > 0) add(arg.slice(0, index + '\\resources\\app\\dsh\\node_modules'.length));
+  }
+
   const exeDir = dirname(process.execPath || '');
   add(join(exeDir, 'resources', 'app', 'dsh', 'node_modules'));
   add(join(exeDir, '..', 'resources', 'app', 'dsh', 'node_modules'));
@@ -51,6 +61,20 @@ export function candidateHostRoots() {
   }
   if (process.env.DSH_APP_MODULES) add(process.env.DSH_APP_MODULES);
   return roots;
+}
+
+/**
+ * `package.json` of a host package inside the running application, or undefined.
+ * Used by the diagnostics layer, which wants the manifest without importing anything.
+ */
+export function resolveHostPackageJson(specifier) {
+  const parts = specifier.replace(/^@/, '').split('/');
+  if (parts.length !== 2) return undefined;
+  for (const root of candidateHostRoots()) {
+    const candidate = join(root, `@${parts[0]}`, parts[1], 'package.json');
+    if (existsSync(candidate)) return candidate;
+  }
+  return undefined;
 }
 
 /** The first existing entry for `specifier`, or undefined. Exported for diagnostics. */

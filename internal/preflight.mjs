@@ -14,6 +14,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { resolveHostPackageJson } from './host-packages.mjs';
 
 /** Packages whose versions decide the host contract. */
 export const PEER_SPECIFIERS = ['@deepseek-ai/dsh-tools', '@deepseek-ai/dsh-scope'];
@@ -37,6 +38,24 @@ export function packageInfo(specifier) {
       error: '',
     };
   } catch (error) {
+    // A `link:` install sits outside every node_modules chain, so the bare specifier fails
+    // even though the running application ships the package. Report that copy instead of
+    // "unknown" — it is the one the plugin actually loads (see host-packages.mjs).
+    const fallback = resolveHostPackageJson(specifier);
+    if (fallback !== undefined) {
+      try {
+        const manifest = JSON.parse(readFileSync(fallback, 'utf8'));
+        return {
+          specifier,
+          resolvable: true,
+          path: fallback,
+          version: typeof manifest.version === 'string' ? manifest.version : '',
+          name: typeof manifest.name === 'string' ? manifest.name : specifier,
+          error: '',
+          viaApplication: true,
+        };
+      } catch { /* fall through to the unknown result */ }
+    }
     return {
       specifier,
       resolvable: false,
@@ -54,11 +73,19 @@ export function packageInfo(specifier) {
  */
 export function detectHost() {
   const appBoot = packageInfo('@deepseek-ai/dsh-app-boot');
+  const hostTools = packageInfo('@deepseek-ai/dsh-tools');
   return {
     runtimeVersion: appBoot.version === '' ? null : appBoot.version,
     appBootPath: appBoot.path,
     resolved: appBoot.resolvable,
     resolutionError: appBoot.error,
+    // 本插件实际加载的那份 `@deepseek-ai/dsh-tools` 与它的来源。`link:` 安装时它来自运行中的
+    // 应用目录（而不是插件旁边），排障时这一行能省掉一轮猜测。
+    hostPackages: {
+      tools: hostTools.path,
+      toolsVersion: hostTools.version === '' ? null : hostTools.version,
+      fromApplication: hostTools.viaApplication === true,
+    },
     node: process.versions.node ?? '',
     electron: process.versions.electron ?? null,
     chrome: process.versions.chrome ?? null,

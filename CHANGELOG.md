@@ -54,6 +54,31 @@ Cannot find package '@deepseek-ai/dsh-tools' imported from D:\DSH-Plugins\...
 验证：把包解压到一个**没有 node_modules** 的目录、以 `link:` 装进干净 profile —— 修复前
 `/computer-use/status` 返回 404（行未激活），修复后返回 200 且 `registrationFailures: 0`。
 
+**与插件解压到哪一行无关。** 解析锚点始终是**运行中的应用**，不是插件目录：命令行
+（`<app>\resources\app\dsh\node_modules\...`）→ `process.execPath` → `%LOCALAPPDATA%` /
+`%ProgramFiles%` → `DSH_APP_MODULES`。实测三种刁钻路径全部正常（HTTP 200、
+`registrationFailures: 0`）：
+
+| 解压位置 | 结果 |
+| --- | --- |
+| `E:\临时 目录\插件 安装位置\dsh-computer-use`（空格 + 中文） | 200 |
+| `C:\Users\<用户>\Downloads\插件包\dsh-computer-use-1.40.2\dsh-computer-use`（深层） | 200 |
+| `E:\cu #1\dsh-computer-use`（`#`） | 200 |
+
+`/computer-use/status` 的 `runtime.host` 新增 `hostPackages`，直接写出这份
+`@deepseek-ai/dsh-tools` 来自哪里、是什么版本、是否来自安装目录：
+
+```json
+"hostPackages": {
+  "tools": "C:\\...\\resources\\app\\dsh\\node_modules\\@deepseek-ai\\dsh-tools\\package.json",
+  "toolsVersion": "0.2.1-rc.2",
+  "fromApplication": true
+}
+```
+
+顺带把 `runtimeVersion` 也修好了：`link:` 安装下 `import.meta.resolve` 必然失败，过去这里显示
+`unknown`；现在同一个解析器回落到安装目录读 `dsh-app-boot` 的清单。
+
 **安装入口**：新增 `setup.mjs`（一条命令完成安装 + 清理 + 复核）、`install-and-repair.cmd`
 与 `fix-profile-links.cmd`（双击即可）。
 
