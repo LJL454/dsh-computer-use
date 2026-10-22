@@ -1,0 +1,209 @@
+# 可选的三个任务预设（原先随 @local/dsh-token-guard 合并进核心 bundle）。
+#
+# 1.40.0 起从核心 bundle 拆出：核心安装只挂电脑操作 + token-guard + app-launch，不再因为
+# 预设里的 workspace-dependencies 运行时路径而扩大整个 profile 的启动面。
+# 需要预设时，把本目录作为一个独立 bundle 安装：
+#   dsh plugin --profile <name> add "<插件根>/presets"
+# 三项各自独立：删掉一行只去掉那一个预设。
+# 预设省的是"组合级"token（只挂这个任务需要的插件），与上面 tokenGuard 的"输出级"压缩互补。
+# 注册表里另有内置的 standard / ptc / minimal / cordis，这三条是增量，不是重复。
+# 每行都是独立开关：删掉一行只会去掉那一个预设。
+
+# ── 桌面操作：实测 schema 20,990 → 17,387（−3,603/请求） ─────────────────
+- id: preset-task-desktop
+  name: '@deepseek-ai/dsh-agent-preset'
+  config:
+    id: task-desktop
+    name: 桌面操作
+    order: 20
+    description: 桌面操作：看屏幕、点控件、驱动应用；不含委派、工作流与文档生成
+    plugins:
+      - id: persona
+        name: '@deepseek-ai/dsh-persona'
+        config:
+          prefix: 'You are a coding agent powered by the {{model}} model.'
+          suffix: 'Your working directory is {{cwd}}.'
+      - id: agent-instructions
+        name: '@deepseek-ai/dsh-agent-instructions'
+        config:
+          maxBytes: 65536
+      - id: tool-pwsh
+        name: '@deepseek-ai/dsh-tool-pwsh'
+      - id: tool-fs
+        name: '@deepseek-ai/dsh-tool-fs'
+      # 这里刻意不再挂第二份 @local/dsh-computer-use。
+      #
+      # 上面第 14 行已经有一个全局实例，而每次 apply() 都会新建自己的会话授权表、
+      # 可见性管理器和后台执行状态，并注册同一批 /computer-use/* 路由；宿主
+      # dsh-host-webserver 的 register() 遇到重复 path 会直接抛错，所以第二份
+      # 只会把预设加载打坏，不会提供任何能力。宿主工具注册表本来就向会话继承全局
+      # 工具，预设不需要再挂一次同包。
+      #
+      # 代价是桌面预设不再有独立的 defaultEnabled: true：它和别的会话一样，由用户
+      # 点「电脑操作」芯片开启。不要为了还原这个表面默认值去改全局 defaultEnabled，
+      # 那会影响所有会话。
+      - id: tool-ask-user
+        name: '@deepseek-ai/dsh-tool-ask-user'
+      - id: tool-todo
+        name: '@deepseek-ai/dsh-tool-todo'
+        config:
+          allowParallelInProgress: true
+      - id: present
+        name: '@deepseek-ai/dsh-tool-present'
+      - id: compaction
+        name: cordis:group
+        group: true
+        isolate:
+          compaction: true
+          toolResultPruner: true
+        config:
+          - id: compaction-basic
+            name: '@deepseek-ai/dsh-compaction-basic'
+          - id: tool-result-pruner
+            name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+            config:
+              thresholdChars: 8192
+              headChars: 4096
+              tailChars: 1024
+
+# ── 日志与数据分析：实测 20,990 → 3,069（−17,921/请求） ──────────────────
+- id: preset-task-analysis
+  name: '@deepseek-ai/dsh-agent-preset'
+  config:
+    id: task-analysis
+    name: 日志与数据分析
+    order: 21
+    description: 日志与数据分析：脚本、文件、检索、统计；不含桌面操作
+    plugins:
+      - id: persona
+        name: '@deepseek-ai/dsh-persona'
+        config:
+          prefix: 'You are a coding agent powered by the {{model}} model.'
+          suffix: 'Your working directory is {{cwd}}.'
+      - id: agent-instructions
+        name: '@deepseek-ai/dsh-agent-instructions'
+        config:
+          maxBytes: 65536
+      - id: tool-pwsh
+        name: '@deepseek-ai/dsh-tool-pwsh'
+      - id: tool-fs
+        name: '@deepseek-ai/dsh-tool-fs'
+      - id: tool-fs-search
+        name: '@deepseek-ai/dsh-tool-fs-search'
+        config:
+          sampleOverCapGlobResults: false
+      - id: tool-jobs
+        name: '@deepseek-ai/dsh-tool-jobs'
+      - id: tool-ask-user
+        name: '@deepseek-ai/dsh-tool-ask-user'
+      - id: tool-todo
+        name: '@deepseek-ai/dsh-tool-todo'
+        config:
+          allowParallelInProgress: true
+      - id: present
+        name: '@deepseek-ai/dsh-tool-present'
+      # 这个插件没有默认值：它的 Config 是 z.object({ source: z.string().min(1).required(),
+      # root: z.string().min(1) })。漏掉 config.source 时预设加载器会在激活子插件前
+      # 就校验失败（$.source missing required value），整个预设都起不来——所以两处
+      # 预设（分析、文档）各补一份，缺一不可。
+      #
+      # source 必须指向**含 runtime.json 和 dependencies 的运行时根目录**（不是
+      # python.exe，也不是插件源码目录），而且 apply() 会检查它是绝对路径。
+      #
+      # 这里用 !!js 从环境推导，而不是把某个用户名写死：预设子插件的 config 同样会被
+      # Loader 的 interpolate() 求值（cordis-plugin-loader lib/index.js 里 Entry 的
+      # config getter），所以表达式在这里可用。推导链是
+      #   DSH_RUNTIME_ROOT → %LOCALAPPDATA%/Programs/DeepSeek Harness/resources/runtime/primary-runtime
+      # 两者都拿不到时会得到非绝对路径，插件会直接报错而不是假装可用。
+      #
+      # 刻意不写可选的 root：省略时工具只用 source 里已有的运行时；写了 root 会走
+      # 安装/更新运行时的逻辑，可能复制文件，本问题不需要。
+      - id: tool-workspace-dependencies
+        name: '@deepseek-ai/dsh-tool-workspace-dependencies'
+        config:
+          source: !!js process.env.DSH_RUNTIME_ROOT || ((process.env.LOCALAPPDATA || '') + '/Programs/DeepSeek Harness/resources/runtime/primary-runtime')
+      - id: compaction
+        name: cordis:group
+        group: true
+        isolate:
+          compaction: true
+          toolResultPruner: true
+        config:
+          - id: compaction-basic
+            name: '@deepseek-ai/dsh-compaction-basic'
+          - id: tool-result-pruner
+            name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+            config:
+              thresholdChars: 8192
+              headChars: 4096
+              tailChars: 1024
+
+# ── 文档生成：实测 20,990 → 2,479（−18,511/请求） ────────────────────────
+- id: preset-task-document
+  name: '@deepseek-ai/dsh-agent-preset'
+  config:
+    id: task-document
+    name: 文档生成
+    order: 22
+    description: 文档生成：读素材、算数据、出文档；不含桌面操作与检索
+    plugins:
+      - id: persona
+        name: '@deepseek-ai/dsh-persona'
+        config:
+          prefix: 'You are a coding agent powered by the {{model}} model.'
+          suffix: 'Your working directory is {{cwd}}.'
+      - id: agent-instructions
+        name: '@deepseek-ai/dsh-agent-instructions'
+        config:
+          maxBytes: 65536
+      - id: tool-pwsh
+        name: '@deepseek-ai/dsh-tool-pwsh'
+      - id: tool-fs
+        name: '@deepseek-ai/dsh-tool-fs'
+      - id: skill-filesystem
+        name: '@deepseek-ai/dsh-skill-filesystem'
+      - id: tool-skill
+        name: '@deepseek-ai/dsh-tool-skill'
+      - id: tool-ask-user
+        name: '@deepseek-ai/dsh-tool-ask-user'
+      - id: tool-todo
+        name: '@deepseek-ai/dsh-tool-todo'
+        config:
+          allowParallelInProgress: true
+      - id: present
+        name: '@deepseek-ai/dsh-tool-present'
+      # 这个插件没有默认值：它的 Config 是 z.object({ source: z.string().min(1).required(),
+      # root: z.string().min(1) })。漏掉 config.source 时预设加载器会在激活子插件前
+      # 就校验失败（$.source missing required value），整个预设都起不来——所以两处
+      # 预设（分析、文档）各补一份，缺一不可。
+      #
+      # source 必须指向**含 runtime.json 和 dependencies 的运行时根目录**（不是
+      # python.exe，也不是插件源码目录），而且 apply() 会检查它是绝对路径。
+      #
+      # 这里用 !!js 从环境推导，而不是把某个用户名写死：预设子插件的 config 同样会被
+      # Loader 的 interpolate() 求值（cordis-plugin-loader lib/index.js 里 Entry 的
+      # config getter），所以表达式在这里可用。推导链是
+      #   DSH_RUNTIME_ROOT → %LOCALAPPDATA%/Programs/DeepSeek Harness/resources/runtime/primary-runtime
+      # 两者都拿不到时会得到非绝对路径，插件会直接报错而不是假装可用。
+      #
+      # 刻意不写可选的 root：省略时工具只用 source 里已有的运行时；写了 root 会走
+      # 安装/更新运行时的逻辑，可能复制文件，本问题不需要。
+      - id: tool-workspace-dependencies
+        name: '@deepseek-ai/dsh-tool-workspace-dependencies'
+        config:
+          source: !!js process.env.DSH_RUNTIME_ROOT || ((process.env.LOCALAPPDATA || '') + '/Programs/DeepSeek Harness/resources/runtime/primary-runtime')
+      - id: compaction
+        name: cordis:group
+        group: true
+        isolate:
+          compaction: true
+          toolResultPruner: true
+        config:
+          - id: compaction-basic
+            name: '@deepseek-ai/dsh-compaction-basic'
+          - id: tool-result-pruner
+            name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+            config:
+              thresholdChars: 8192
+              headChars: 4096
+              tailChars: 1024

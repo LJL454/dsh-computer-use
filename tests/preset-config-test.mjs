@@ -73,19 +73,29 @@ const evaluate = new Function('ctx', 'expr', `
 
 /* ------------------------------------------------------------------- parse -- */
 
-const patchUrl = new URL('../cordis.patch.yml', import.meta.url);
+const patchUrl = new URL('../presets/cordis.patch.yml', import.meta.url);
+const corePatchUrl = new URL('../cordis.patch.yml', import.meta.url);
 const patchPath = patchUrl.pathname.replace(/^\/([A-Za-z]:)/, '$1');
+const corePatchPath = corePatchUrl.pathname.replace(/^\/([A-Za-z]:)/, '$1');
 const text = readFileSync(patchUrl, 'utf8');
+const coreText = readFileSync(corePatchUrl, 'utf8');
 
 console.log('\n== cordis.patch.yml parses in the host dialect ==');
 let document = null;
 try {
   document = yaml.load(text, { schema: dialect });
-  check('parses with JSON_SCHEMA + !!js', Array.isArray(document), typeof document);
+  check('presets/cordis.patch.yml parses with JSON_SCHEMA + !!js', Array.isArray(document), typeof document);
 } catch (error) {
-  check('parses with JSON_SCHEMA + !!js', false, String(error?.message ?? error));
+  check('presets/cordis.patch.yml parses with JSON_SCHEMA + !!js', false, String(error?.message ?? error));
 }
-if (document === null) {
+let coreDocument = null;
+try {
+  coreDocument = yaml.load(coreText, { schema: dialect });
+  check('cordis.patch.yml parses with JSON_SCHEMA + !!js', Array.isArray(coreDocument), typeof coreDocument);
+} catch (error) {
+  check('cordis.patch.yml parses with JSON_SCHEMA + !!js', false, String(error?.message ?? error));
+}
+if (document === null || coreDocument === null) {
   console.log(`\n===== ${passed} passed, ${failures.length + 1} failed =====`);
   process.exitCode = 1;
   throw new Error('cannot continue without a parsed patch');
@@ -110,23 +120,37 @@ function* rows(value, path = '$') {
 }
 
 const all = [...rows(document)];
+const coreAll = [...rows(coreDocument)];
 
 console.log('\n== §四.2 the duplicate mount is gone ==');
-const mounts = all.filter((entry) => entry.row.name === '@local/dsh-computer-use');
-check('exactly one @local/dsh-computer-use row', mounts.length === 1, `${mounts.length}: ${mounts.map((m) => m.path).join(', ')}`);
+const mounts = coreAll.filter((entry) => entry.row.name === '@local/dsh-computer-use');
+check('core bundle has exactly one @local/dsh-computer-use row', mounts.length === 1, `${mounts.length}: ${mounts.map((m) => m.path).join(', ')}`);
 check(
   'and it is the global row, not a preset child',
   mounts.length === 1 && !mounts[0].path.includes('.plugins['),
   mounts[0]?.path,
 );
 check(
-  'no preset child mounts the same package under another id',
-  all.filter((entry) => entry.row.name === '@local/dsh-computer-use' && entry.row.id !== 'computer-use').length === 0,
+  'the optional preset bundle mounts no copy at all',
+  all.filter((entry) => entry.row.name === '@local/dsh-computer-use').length === 0,
+  String(all.filter((entry) => entry.row.name === '@local/dsh-computer-use').length),
+);
+check(
+  'the core bundle carries no task presets (1.40.0 split)',
+  coreAll.filter((entry) => entry.row.name === '@deepseek-ai/dsh-agent-preset').length === 0,
+  String(coreAll.filter((entry) => entry.row.name === '@deepseek-ai/dsh-agent-preset').length),
 );
 const globalRow = mounts[0]?.row;
 check('the global row keeps its tokenGuard config', globalRow?.config?.tokenGuard?.enabled === true);
 check('the global row keeps its appLaunch config', globalRow?.config?.appLaunch?.enabled === true);
 check('the global row keeps defaultEnabled: false', globalRow?.config?.defaultEnabled === false);
+try {
+  const presetsManifest = JSON.parse(readFileSync(new URL('../presets/package.json', import.meta.url), 'utf8'));
+  check('the optional preset bundle declares its own dsh.bundle patch', presetsManifest?.dsh?.bundle?.patch === './cordis.patch.yml', JSON.stringify(presetsManifest?.dsh));
+  check('the optional preset bundle keeps its own version', presetsManifest?.version === JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version, `${presetsManifest?.version}`);
+} catch (error) {
+  check('the optional preset bundle has a readable manifest', false, String(error?.message ?? error));
+}
 
 console.log('\n== §三 the workspace-dependencies rows carry a real source ==');
 const dependencyRows = all.filter((entry) => entry.row.name === '@deepseek-ai/dsh-tool-workspace-dependencies');

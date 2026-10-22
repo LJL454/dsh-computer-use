@@ -34,6 +34,15 @@ export const IMAGE_VALUE_SCHEMA = {
     width: { type: 'integer', required: true },
     height: { type: 'integer', required: true },
     name: { type: 'string' },
+    // 存储层缩放时附带：原图（重编码前）的像素尺寸。没有缩放时该字段缺席，所以不是 required。
+    originalDimensions: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        width: { type: 'integer', required: true },
+        height: { type: 'integer', required: true },
+      },
+    },
   },
 };
 

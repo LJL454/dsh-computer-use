@@ -395,9 +395,17 @@ export function createCaptureService({ sessionKey }) {
         // the same capture has to be able to say "you have not seen this".
         return { note: `The capture was not attached. Read it with the read_image tool: ${path}` };
       }
+      // 这一条记录会被宿主逐字节复核：`dsh-attachment-local.readImageFile()` 重新探测落盘
+      // 对象的格式/尺寸，任何一项与 ref 不符就抛 ATTACHMENT_CORRUPT，而这条 image block 会被
+      // 之后每一轮请求重放——一次截图就能让整个会话永久不可用。
+      //
+      // 存储层是**有损重编码**的：超限的 PNG 会被转成 WebP（带 alpha）或 JPEG，并可能附带
+      // originalDimensions。所以 mediaType/bytes/width/height 必须全部来自同一个 ref；
+      // 用入参的 mediaType 覆盖它，正是"PNG 标签 + WebP 实体"那条坏记录的来源（1.39.5 事故）。
       const image = {
+        ...ref,
         attachmentId: String(ref.attachmentId),
-        mediaType,
+        mediaType: String(ref.mediaType ?? mediaType),
         bytes: Number(ref.bytes ?? data.byteLength),
         width: Number(ref.width ?? 0),
         height: Number(ref.height ?? 0),

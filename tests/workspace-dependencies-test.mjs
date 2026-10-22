@@ -59,7 +59,7 @@ const evaluate = new Function('ctx', 'expr', `
 
 /* ------------------------------------------------- read the patched source -- */
 
-const patchPath = new URL('../cordis.patch.yml', import.meta.url);
+const patchPath = new URL('../presets/cordis.patch.yml', import.meta.url);
 const document = yaml.load(readFileSync(patchPath, 'utf8'), { schema: yaml.JSON_SCHEMA.extend(JsExpr) });
 
 /** Every row named `@deepseek-ai/dsh-tool-workspace-dependencies`, anywhere in the tree. */

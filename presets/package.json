@@ -1,0 +1,28 @@
+{
+  "name": "@local/dsh-computer-use-presets",
+  "version": "1.40.0",
+  "license": "MIT",
+  "author": "LJL454 <134773405+LJL454@users.noreply.github.com>",
+  "type": "module",
+  "description": "可选的三个任务预设（桌面操作 / 日志与数据分析 / 文档生成），独立于 @local/dsh-computer-use 核心 bundle 安装。",
+  "private": false,
+  "exports": {
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "manifestVersion": 1
+  },
+  "files": [
+    "cordis.patch.yml",
+    "README.md",
+    "package.json"
+  ],
+  "engines": {
+    "node": ">=20",
+    "dsh": ">=0.2.1-rc.2 <0.3.0"
+  }
+}

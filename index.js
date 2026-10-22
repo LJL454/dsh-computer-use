@@ -13,9 +13,8 @@
  */
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, lstatSync } from 'node:fs';
 import { mkdir, readFile, rm } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PowerShellBackend, ComputerUseBackendError } from './backend/bridge.js';
@@ -32,6 +31,14 @@ import {
   buildReadsCount,
   setBuildCacheEnabled,
 } from './internal/build-check.mjs';
+import {
+  PACKAGE_ROOT,
+  readPackageManifest,
+  summarizeRelease,
+  verifyRelease,
+} from './internal/release-manifest.mjs';
+import { claimInstance, describeInstance, releaseInstance } from './internal/instance-registry.mjs';
+import { detectHost } from './internal/preflight.mjs';
 import {
   backendMessage,
   decorateFailure,
@@ -113,12 +120,8 @@ export const inject = ['tools'];
  * obviously not a release rather than to a plausible wrong number.
  */
 const VERSION = (() => {
-  try {
-    const manifest = JSON.parse(readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf8'));
-    return typeof manifest.version === 'string' && manifest.version !== '' ? manifest.version : '0.0.0-unversioned';
-  } catch {
-    return '0.0.0-unversioned';
-  }
+  const manifest = readPackageManifest(PACKAGE_ROOT).manifest;
+  return typeof manifest?.version === 'string' && manifest.version !== '' ? manifest.version : '0.0.0-unversioned';
 })();
 
 /**
@@ -226,6 +229,58 @@ function sendJson(res, status, payload) {
  * @param config - deployment configuration for this plugin row.
  */
 export function apply(ctx, config = {}) {
+  /**
+   * §A: one owner per host.
+   *
+   * Every `apply()` used to create its own grant table, visibility manager, backend state and
+   * the same fixed `/computer-use/*` routes. A second mount therefore failed on the duplicate
+   * status route — after it had already registered tools — and the preset that carried it
+   * broke. The claim below happens **before** any of that. It is keyed on `ctx.root` (or a
+   * per-context fallback for test contexts), so two module copies in one host see the same
+   * registry while two independent hosts in one process stay isolated.
+   */
+  const claim = claimInstance({
+    ctx,
+    packageName: '@local/dsh-computer-use',
+    version: VERSION,
+    root: PACKAGE_ROOT,
+  });
+  if (!claim.ok) {
+    const existing = claim.existing;
+    ctx?.logger?.error?.(
+      `computer-use: DUPLICATE_INSTANCE — ${existing.packageName}@${existing.version} is already mounted from ${existing.root}; this copy ${VERSION}@${PACKAGE_ROOT} was not mounted. Remove the duplicate bundle/preset row; the first instance keeps its tools and routes.`,
+    );
+    return;
+  }
+  /** This instance's slot in the host-wide registry. */
+  const instance = claim.record;
+  const releaseOwnership = () => releaseInstance(claim.registry, instance);
+  if (typeof ctx?.effect === 'function') {
+    try {
+      ctx.effect(() => releaseOwnership, 'computer-use: single-instance ownership');
+    } catch (error) {
+      // A host without a working effect surface cannot tell us when to release. The record
+      // would then outlive the plugin; say so rather than pretending the claim is durable.
+      ctx?.logger?.warn?.(`computer-use: could not register instance ownership (${String(error)}); duplicate-mount detection may report a stale owner until restart`);
+    }
+  } else if (typeof ctx?.on === 'function') {
+    ctx.on('dispose', releaseOwnership);
+  }
+
+  /**
+   * §G: the whole release identity, not just worker.ps1.
+   *
+   * Computed once per apply. A shipped `release-manifest.json` is compared with the files on
+   * disk; a source checkout without one still reports its computed id so "which build is this?"
+   * has an answer. A mismatch is logged loudly here and reported as a fatal finding by doctor.
+   */
+  const release = verifyRelease(PACKAGE_ROOT, { version: VERSION });
+  const host = detectHost();
+  if (release.present && !release.matches) {
+    ctx?.logger?.error?.(
+      `computer-use: RELEASE_BUILD_MISMATCH — installed files do not match ${release.manifestPath} (computed ${release.buildId}, manifest ${release.manifest?.releaseBuildId ?? '?'}). This is a half-applied upgrade; reinstall the whole package and restart. Details: ${JSON.stringify(release.checks ?? {})}`,
+    );
+  }
   const defaultEnabled = config.defaultEnabled === true;
   const shotRoot = typeof config.shotDir === 'string' && config.shotDir.trim() !== ''
     ? config.shotDir
@@ -794,6 +849,37 @@ export function apply(ctx, config = {}) {
     }
   }
 
+  /**
+   * 1.40.1 安全网：只要**这个 profile 自己带了一份** `@deepseek-ai/dsh-tools`（1.39.x 与
+   * 1.40.0 把它声明成 `optional: false` 的 peer，包管理器就会在 profile 里落一份实体），
+   * 宿主就会优先加载那一份；版本一旦与桌面版不一致，loader 会禁用 `tools` 这一行，所有注入
+   * 它的 row 一起挂起，`agent-loop` 是 required → 整机起不来，而且报错里不点名任何插件。
+   *
+   * 判据用 Node 原生解析（不走宿主的适配层）：插件被装进 profile 时，`@deepseek-ai/dsh-tools`
+   * 会解析到 `...\profiles\<name>\node_modules\...`；干净机器上这条解析根本不存在，直接抛错。
+   * 所以「解析成功且落在 profiles 下」精确等于「profile 里有一份会抢在宿主前面的副本」。
+   * 只报警、不改文件；任何异常都不许打断启动。
+   */
+  let profileShadowNotice = null;
+  try {
+    const resolver = import.meta.resolve;
+    if (typeof resolver === 'function') {
+      const resolved = resolver('@deepseek-ai/dsh-tools');
+      if (/[\\/]profiles[\\/][^\\/]+[\\/]node_modules[\\/]/.test(resolved)) {
+        profileShadowNotice = resolved;
+        ctx.logger?.error?.(
+          'computer-use: this profile carries its own copy of @deepseek-ai/dsh-tools (%s). '
+          + 'The host loads that copy first, so a version mismatch makes the whole app refuse to start '
+          + '("agent-loop (required) tools", no plugin named). Run tools/fix-profile-links.ps1 to turn it '
+          + 'into a junction to the app copy, then restart DSH.',
+          resolved,
+        );
+      }
+    }
+  } catch {
+    // 原生解析找不到该包 = 这一台机器没有那份副本，正常
+  }
+
   /** The runtime summary the status route exposes: counters, recent spans, profiles, workers. */
   function runtimeSummary() {
     const describe = (instance) => (instance === null
@@ -828,10 +914,19 @@ export function apply(ctx, config = {}) {
         // 而不仅是偶然耗时下降).
         buildReads: buildReadsCount(),
       },
+      // §A/§G: which instance owns this host, how many duplicate mounts tried to join it, and
+      // which release identity the files on disk actually form. These are the answers that used
+      // to require guessing from a startup failure.
+      instance: describeInstance(instance),
+      release: summarizeRelease(release),
+      host,
       // 装配期的失败：被宿主拒绝的工具描述符（工具名 + 原话），以及 schema 可见性这条链现在
       // 有多少个活 agent 可对齐。两者都为"芯片亮着、工具却没有"这种症状留了可读的原因——
       // 前者解释工具为什么不在，后者解释点开之后为什么还没回来。
       registrationFailures: registrationFailures.map((entry) => ({ ...entry })),
+      // 1.40.1：profile 里自带的那份 @deepseek-ai/dsh-tools 抢在了宿主前面。非 null 时宿主
+      // 的 `tools` 行来自这份副本，版本一旦与桌面版不一致，整机下一次启动就会起不来。
+      profileShadow: profileShadowNotice,
       schemaVisibility: {
         enabled: visibility.enabled,
         liveAgents: visibility.liveAgentCount(),
@@ -4109,6 +4204,7 @@ export function apply(ctx, config = {}) {
     ok: true,
     plugin: '@local/dsh-computer-use',
     version: VERSION,
+    buildId: release.buildId,
     label: LABEL,
     platform: process.platform,
     supported: SUPPORTED,
@@ -4251,9 +4347,13 @@ export function apply(ctx, config = {}) {
             const sessionId = url.searchParams.get('sessionId') ?? undefined;
             sendJson(res, 200, {
               ...collectDoctorReport({
+                mode: 'host',
                 supported: SUPPORTED,
                 platform: process.platform,
                 version: VERSION,
+                packageRoot: PACKAGE_ROOT,
+                host,
+                release,
                 defaultEnabled,
                 registrationFailures,
                 registeredToolNames,
@@ -4304,6 +4404,9 @@ export function apply(ctx, config = {}) {
     // process this plugin has to stop (A10).
     readBackend?.dispose();
     readBackend = null;
+    // §A: free the host-wide ownership slot. A later mount (after a profile change or a test
+    // teardown) must be able to claim it instead of being reported as a duplicate forever.
+    releaseOwnership();
     void (async () => {
       try {
         // 登记表里的先删 —— 包括"抓完了还没交给任何会话"的残渣。

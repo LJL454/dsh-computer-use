@@ -76,9 +76,14 @@ try {
   check('审计工具返回了结论', typeof audit?.sessionIsPolluted === 'boolean', JSON.stringify(audit).slice(0, 120));
   check('审计工具说出了要摘哪些变量', Array.isArray(audit?.wouldStrip) && audit.wouldStrip.length > 0,
     JSON.stringify(audit?.wouldStrip ?? []).slice(0, 120));
-  check('它确实看到了本会话的 Electron 注入变量',
-    audit?.present?.some?.((row) => row.name === 'ELECTRON_RUN_AS_NODE') === true,
-    JSON.stringify((audit?.present ?? []).map((row) => row.name)));
+  // This test used to require the author's environment to carry ELECTRON_RUN_AS_NODE. A clean
+  // shell has no such variable and the audit is still correct — it reports a clean session.
+  // Assert the *agreement* instead of the accident.
+  const electronInjected = Object.entries(process.env)
+    .some(([name, value]) => name.toUpperCase() === 'ELECTRON_RUN_AS_NODE' && value !== undefined);
+  check('它报告的注入状态与当前环境一致（不再依赖作者环境）',
+    audit?.sessionIsPolluted === electronInjected,
+    `sessionIsPolluted=${audit?.sessionIsPolluted}, present=${electronInjected}`);
 
   console.log(`\n${passed} passed, ${failures.length} failed`);
   if (failures.length > 0) for (const failure of failures) console.log(`  - ${failure}`);

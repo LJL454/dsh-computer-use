@@ -189,7 +189,7 @@ async function main() {
   // 1.39.2：多出来的那条是 /computer-use/doctor —— 只读自检，用来把"芯片亮着、工具调不动"
   // 这一类没有症状的故障变成一份能直接读的清单（见 internal/doctor.mjs）。
   check('doctor route path', harness.routes.has('/computer-use/doctor'));
-  check('registered 5 effects (4 routes + backend lifetime)', harness.effects.length === 5, harness.effects.map((e) => e.label).join(' | '));
+  check('registered 6 effects (4 routes + ownership + backend lifetime)', harness.effects.length === 6, harness.effects.map((e) => e.label).join(' | '));
 
   console.log('\n== tool schemas ==');
   for (const name of EXPECTED_TOOLS) {
@@ -516,7 +516,7 @@ async function main() {
   plugin.apply(headless.ctx, { defaultEnabled: false });
   check('tools still register without a web server', headless.tools.size === EXPECTED_TOTAL, `${headless.tools.size} tools`);
   check('no chip routes register without a web server', headless.routes.size === 0, [...headless.routes.keys()].join(', '));
-  check('the backend lifetime effect still registers', headless.effects.length === 1, headless.effects.map((e) => e.label).join(' | '));
+  check('the ownership and backend lifetime effects still register', headless.effects.length === 2, headless.effects.map((e) => e.label).join(' | '));
   check('a never-granted Session is still refused', await headless.tools.get('computer_windows').execute({}, { agent: { session: { id: 'never-granted' } } })
     .then(() => false, (error) => error.message.includes('电脑操作尚未在本会话开启')));
 

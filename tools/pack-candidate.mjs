@@ -1,14 +1,21 @@
 /**
- * Build a verifiable candidate package (§13.1–§13.7).
+ * Build a verifiable candidate package (§13.1–§13.7, plus the 1.40.0 release-identity fix).
  *
  * The plan's release requirements, and how this script answers them:
  *
  *   1. keep the original version and its hashes   -> `BASELINE` below, printed with every build
  *   2. every stage ships a candidate              -> one zip per run, named after the build id
- *   3. output/schema changes documented           -> `--manifest` lists every published file hash
+ *   3. output/schema changes documented           -> `release-manifest.json` lists every
+ *                                                    production file hash, and the zip is read back
+ *   4. the whole release is one build identity    -> `releaseBuildId` covers index.js, client.js,
+ *                                                    internal/, browser/, backend/, the patch and
+ *                                                    the optional preset bundle; `workerBuildId`
+ *                                                    remains the local protocol identity
  *   5. the build check covers all executed code   -> both `worker.ps1` and `release-input.ps1`
- *                                                    are hashed here *and* checked at startup by
- *                                                    the host, so the two answers can be compared
+ *                                                    are in the identity *and* checked at startup
+ *   6. the zip contains no previous releases      -> artifacts (`*.zip`, `*.tgz`, `_zips/`,
+ *                                                    `dist/`, `artifacts/`, the output dir) are
+ *                                                    excluded from the file walk
  *   7. host and worker roll back together         -> the manifest names both halves, and the
  *                                                    printed rollback line says "as a set"
  *
@@ -19,13 +26,24 @@
  */
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import {
+  MANIFEST_NAME,
+  buildReleaseIdentity,
+  productionFiles,
+  readPackageManifest,
+  writeReleaseManifest,
+} from '../internal/release-manifest.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PLUGIN = dirname(HERE);
-const packageJson = JSON.parse(readFileSync(join(PLUGIN, 'package.json'), 'utf8'));
+const packageJson = readPackageManifest(PLUGIN).manifest;
+if (packageJson === null) {
+  console.error('FAIL cannot read package.json');
+  process.exit(1);
+}
 
 /**
  * The version this work started from, with the two hashes that identify the pair (§13.1).
@@ -37,37 +55,22 @@ const packageJson = JSON.parse(readFileSync(join(PLUGIN, 'package.json'), 'utf8'
 const BASELINE = {
   version: '1.39.1',
   workerSha256: '5e6787146c585e1141f8bebbb435da50f2d220cb63ec424cefaf236b9d4ebc7f',
-  note: 'the release zip shipped as dist/dsh-computer-use-1.39.1.zip; this candidate is that build plus the 9.txt execution plan',
+  note: 'the release zip shipped as dist/dsh-computer-use-1.39.1.zip; this candidate is that build plus the 1.40.0 hardening work',
 };
 
 const outIndex = process.argv.indexOf('--out');
-const outDir = outIndex >= 0 ? process.argv[outIndex + 1] : join(PLUGIN, 'dist');
+const outDir = outIndex >= 0 ? resolve(process.argv[outIndex + 1]) : join(PLUGIN, 'dist');
 const stamp = new Date().toISOString().slice(0, 10);
 
-/** Files a candidate must contain: everything the plugin executes. */
-const REQUIRED = [
-  'index.js',
-  'client.js',
-  'backend/worker.ps1',
-  'backend/bridge.js',
-  'backend/release-input.ps1',
-  'browser/connection.mjs',
-  'browser/state.mjs',
-  'browser/actions.mjs',
-  'internal/token-guard.mjs',
-  'internal/summarize.js',
-  'internal/app-launch.js',
-  'internal/app-launch.mjs',
-  'cordis.patch.yml',
-  'package.json',
-];
+/** Files a candidate must contain: every production file from the shared identity module. */
+const REQUIRED = productionFiles(PLUGIN);
 
 const sha256 = (path) => createHash('sha256').update(readFileSync(path)).digest('hex');
 
 const failures = [];
 for (const name of REQUIRED) {
   try {
-    statSync(join(PLUGIN, name));
+    statSync(join(PLUGIN, ...name.split('/')));
   } catch {
     failures.push(`missing required file: ${name}`);
   }
@@ -86,15 +89,42 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-/** Every file the package would ship, in a stable order. */
+/** Write the release manifest before the walk, so the zip and the manifest describe one tree. */
+let writtenManifest;
+try {
+  writtenManifest = writeReleaseManifest(PLUGIN, { builtAt: new Date().toISOString() });
+} catch (error) {
+  console.error(`FAIL ${error instanceof Error ? error.message : String(error)}`);
+  process.exit(1);
+}
+const identity = buildReleaseIdentity(PLUGIN);
+
+/** Directory names that are products of running the project, never inputs to a release. */
+const SKIP_DIRS = new Set(['node_modules', 'dist', 'artifacts', '.git', '_zips', 'coverage', '.cache']);
+/** File names that are previous releases or packer scratch. */
+const ARTIFACT_SUFFIXES = ['.zip', '.tgz', '.tar', '.gz', '.7z', '.sha256', '.sha256.txt'];
+const ARTIFACT_NAMES = new Set([MANIFEST_NAME]);
+
+/**
+ * Every file the package would ship, in a stable order.
+ * @param dir - directory to walk.
+ * @param list - accumulator.
+ * @returns absolute paths.
+ */
 function walk(dir, list = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-    // `dist` 是打包产物、`artifacts` 是测量输出（stress-soak 的 JSON）：都不进包，它们属于"跑出来的"，
-    // 不属于"要装的"。
-    if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name === 'artifacts' || entry.name === '.git') continue;
     const full = join(dir, entry.name);
-    if (entry.isDirectory()) walk(full, list);
-    else list.push(full);
+    if (entry.isDirectory()) {
+      if (SKIP_DIRS.has(entry.name)) continue;
+      if (resolve(full) === outDir) continue;
+      walk(full, list);
+      continue;
+    }
+    const lower = entry.name.toLowerCase();
+    // release-manifest.json is the one generated file that *is* shipped; it is named apart
+    // from the previous-release artifacts so the check can tell the two apart.
+    if (!ARTIFACT_NAMES.has(entry.name) && ARTIFACT_SUFFIXES.some((suffix) => lower.endsWith(suffix))) continue;
+    list.push(full);
   }
   return list;
 }
@@ -105,18 +135,20 @@ const files = walk(PLUGIN)
   // needs — but the *runtime* set is what the build check covers, and the two are named apart.
   .map((path) => ({ path, name: relative(PLUGIN, path).split('\\').join('/') }));
 
+const worker = identity.files.find((entry) => entry.name === 'backend/worker.ps1');
 const manifest = {
   name: packageJson.name,
   version: packageJson.version,
   builtAt: new Date().toISOString(),
   baseline: BASELINE,
-  executionSet: REQUIRED.map((name) => ({ name, sha256: sha256(join(PLUGIN, name)) })),
+  // §G: the whole release, not just worker.ps1. The old `buildId` is kept as an alias for
+  // scripts that still read it, but its meaning is now the release identity.
+  releaseBuildId: identity.buildId,
+  buildId: identity.buildId,
+  workerBuildId: worker?.sha256?.slice(0, 16) ?? '',
+  executionSet: identity.files,
   files: files.map((file) => ({ name: file.name, bytes: statSync(file.path).size, sha256: sha256(file.path) })),
 };
-manifest.buildId = createHash('sha256')
-  .update(manifest.executionSet.filter((one) => one.name === 'backend/worker.ps1').map((one) => one.sha256).join(''))
-  .digest('hex')
-  .slice(0, 16);
 
 mkdirSync(outDir, { recursive: true });
 const manifestPath = join(outDir, `candidate-${stamp}-manifest.json`);
@@ -124,20 +156,15 @@ writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
 
 // A zip via PowerShell keeps this dependency-free on the platform the plugin targets.
 //
-// Two things are deliberate here.
-//
 // The entry names are built explicitly, instead of using `Compress-Archive -Path $files.FullName`:
 // that form derives each entry name from the file's own path, so every file landed at the archive
-// ROOT and the directory tree was lost — `backend/worker.ps1` came out as `worker.ps1`, next to a
-// bare `00-preamble.ps1` and `package.json`. The result unzipped into a flat pile that could not be
-// installed, which is the one thing a candidate package must survive.
-//
-// The file list is handed over from `walk()` rather than re-derived by the packer. That is what
-// makes the archive and the manifest the same set by construction: the exclusions (node_modules,
-// dist, artifacts, .git) are decided once, in one place, and a file the manifest lists is a file
-// the archive holds.
+// ROOT and the directory tree was lost. The file list is handed over from `walk()` rather than
+// re-derived by the packer, so the archive and the manifest are the same set by construction.
 const zipPath = join(outDir, `dsh-computer-use-${packageJson.version}-${stamp}.zip`);
 const listPath = join(outDir, `.zip-input-${stamp}.txt`);
+// `ZipFile.Open(..., 'Create')` refuses an existing file. A rebuild must replace yesterday's
+// candidate, not fail because the same version was packed earlier in the day.
+rmSync(zipPath, { force: true });
 writeFileSync(listPath, `${files.map((file) => file.name).join('\n')}\n`, 'utf8');
 
 /**
@@ -196,9 +223,9 @@ try {
   rmSync(listPath, { force: true });
 }
 
-console.log(`candidate: ${packageJson.name}@${packageJson.version} (worker build ${manifest.buildId})`);
+console.log(`candidate: ${packageJson.name}@${packageJson.version} (release ${manifest.releaseBuildId}, worker ${manifest.workerBuildId})`);
 console.log(`baseline : ${BASELINE.version}, worker.ps1 sha256 ${BASELINE.workerSha256.slice(0, 16)}…`);
-console.log(`manifest : ${manifestPath} (${manifest.files.length} files, ${manifest.executionSet.length} in the execution set)`);
+console.log(`manifest : ${manifestPath} (${manifest.files.length} shipped files, ${manifest.executionSet.length} in the execution set)`);
 console.log(zipOk ? `package  : ${zipPath}` : 'package  : NOT BUILT (see the error above)');
 
 /**
@@ -222,14 +249,17 @@ if (zipOk) {
   const result = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script], { encoding: 'utf8' });
   const entries = (result.stdout ?? '').split(/\r?\n/).map((line) => line.trim()).filter((line) => line !== '');
   const misplaced = entries.filter((name) => !name.startsWith('dsh-computer-use/'));
-  const missing = REQUIRED.filter((name) => !entries.includes(`dsh-computer-use/${name}`));
-  layoutOk = entries.length > 0 && misplaced.length === 0 && missing.length === 0;
+  const missing = [...REQUIRED, MANIFEST_NAME].filter((name) => !entries.includes(`dsh-computer-use/${name}`));
+  const expected = new Set(files.map((file) => `dsh-computer-use/${file.name}`));
+  const unexpected = entries.filter((name) => !expected.has(name));
+  layoutOk = entries.length > 0 && misplaced.length === 0 && missing.length === 0 && unexpected.length === 0;
   console.log(`layout   : ${layoutOk ? 'OK' : 'BAD'} (${entries.length} entries, all under dsh-computer-use/)`);
   if (!layoutOk) {
     if (misplaced.length > 0) console.error(`  ${misplaced.length} entr(ies) outside the package folder, e.g. ${misplaced.slice(0, 3).join(', ')}`);
     if (missing.length > 0) console.error(`  missing from the archive: ${missing.join(', ')}`);
+    if (unexpected.length > 0) console.error(`  unexpected in the archive: ${unexpected.slice(0, 5).join(', ')}`);
   }
 }
 
-console.log('rollback : restore index.js, client.js, backend/, browser/ and internal/ together — host and worker must be the same build (§13.7); old frames, UIA refs and browser refs are invalidated by the restart that follows (§13.8).');
+console.log('rollback : restore index.js, client.js, backend/, browser/, internal/, cordis.patch.yml and presets/ together — host and worker must be the same build (§13.7); old frames, UIA refs and browser refs are invalidated by the restart that follows (§13.8).');
 process.exit(zipOk && layoutOk ? 0 : 1);

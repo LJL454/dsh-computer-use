@@ -164,7 +164,18 @@ export class CdpConnection {
    */
   constructor(options) {
     this.endpoint = String(options.endpoint ?? '');
-    this.WebSocketImpl = options.WebSocketImpl ?? WebSocket;
+    const WebSocketImpl = options.WebSocketImpl ?? globalThis.WebSocket;
+    // Node 20.10 introduced a global WebSocket behind a flag, 21 enabled it, and 22 made it
+    // stable. A host without one is not broken — the public browser tools already return
+    // `capability_unavailable` — but an explicit constructor error turns a bare
+    // `ReferenceError: WebSocket is not defined` into a named capability state.
+    if (typeof WebSocketImpl !== 'function') {
+      throw new CdpError(
+        'this Node runtime has no global WebSocket, so the CDP channel cannot open. Browser tools require Node 22+ (or an explicit WebSocketImpl); the desktop tools are unaffected.',
+        'WEBSOCKET_UNAVAILABLE',
+      );
+    }
+    this.WebSocketImpl = WebSocketImpl;
     this.connectTimeoutMs = Number(options.connectTimeoutMs ?? 5000);
     this.defaultTimeoutMs = Number(options.defaultTimeoutMs ?? 10000);
     this.maxMessageBytes = Number(options.maxMessageBytes ?? DEFAULT_MAX_MESSAGE_BYTES);

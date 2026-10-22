@@ -801,6 +801,47 @@ try {
   const bareBlocks = bare.get('computer_screenshot').output.render({}, bareValue);
   check('render degrades to two text blocks', bareBlocks.length === 2 && bareBlocks[1].type === 'text', bareBlocks.map((b) => b.type).join(','));
 
+  console.log('\n== a store that re-encodes wins over the media type we asked for ==');
+  // 1.39.5 事故：宿主把 3440×1440 的 PNG 归一化成 WebP（3165×1325、767 KB），插件却把入参的
+  // 'image/png' 写进了会话记录。宿主下一次重放历史时按字节复核 ref，判 ATTACHMENT_CORRUPT，
+  // 该会话此后每一轮都在 step 1 失败，用户无法从界面恢复。这个假存储会改格式、改尺寸、附带
+  // originalDimensions，用来把"记录必须跟 ref 走"钉死。
+  {
+    const REF = {
+      attachmentId: 'sha256:reencoded',
+      mediaType: 'image/webp',
+      bytes: 767854,
+      width: 3165,
+      height: 1325,
+      originalDimensions: { width: 3440, height: 1440 },
+    };
+    const tools2 = new Map();
+    const services2 = {
+      webServer: { register: () => () => {} },
+      attachments: { saveImages: async (inputs) => inputs.map(() => ({ ...REF, originalDimensions: { ...REF.originalDimensions } })) },
+    };
+    const ctx2 = {
+      tools: { register: (d) => { tools2.set(d.name, d); return () => {}; } },
+      webServer: services2.webServer,
+      effect: (fn) => { const d = fn(); return () => { if (typeof d === 'function') d(); }; },
+      inject: (deps, callback) => { if (deps.every((name) => services2[name] !== undefined)) callback(ctx2); return () => {}; },
+      get: (name) => services2[name],
+      logger: { info: () => {} },
+    };
+    plugin.apply(ctx2, { defaultEnabled: true });
+    const definition = tools2.get('computer_screenshot');
+    const value = await definition.execute({ format: 'png' }, exec);
+    const image = value.image ?? {};
+    check('re-encode: mediaType follows the store, not the request', image.mediaType === REF.mediaType, `${image.mediaType} vs ${REF.mediaType}`);
+    check('re-encode: bytes/width/height all come from the same ref', image.bytes === REF.bytes && image.width === REF.width && image.height === REF.height,
+      JSON.stringify({ bytes: image.bytes, width: image.width, height: image.height }));
+    check('re-encode: originalDimensions are passed through', image.originalDimensions?.width === REF.originalDimensions.width && image.originalDimensions?.height === REF.originalDimensions.height,
+      JSON.stringify(image.originalDimensions));
+    const reencodeErrors = [];
+    validate(value, definition.output.schema, 'value', reencodeErrors);
+    check('re-encode: the value still satisfies its declared schema', reencodeErrors.length === 0, reencodeErrors.join(' | '));
+  }
+
   console.log(`\n===== ${passed} passed, ${failures.length} failed =====`);
   if (failures.length > 0) {
     for (const failure of failures) console.log(`  - ${failure}`);

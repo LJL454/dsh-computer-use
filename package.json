@@ -1,6 +1,6 @@
 {
   "name": "@local/dsh-computer-use",
-  "version": "1.39.5",
+  "version": "1.40.2",
   "license": "MIT",
   "author": "LJL454 <134773405+LJL454@users.noreply.github.com>",
   "type": "module",
@@ -8,7 +8,8 @@
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml"
   },
   "dsh": {
     "bundle": {
@@ -28,10 +29,15 @@
     "index.js",
     "client.js",
     "doctor.mjs",
+    "setup.mjs",
+    "release-manifest.json",
+    "README.md",
     "INSTALL.md",
+    "CHANGELOG.md",
     "backend",
     "browser",
     "internal",
+    "presets",
     "cordis.patch.yml",
     "live-tool-test.mjs",
     "schema-test.mjs",
@@ -59,6 +65,8 @@
     "merge-mount-test.mjs",
     "app-candidates-test.mjs",
     "compile-check.ps1",
+    "fix-profile-links.cmd",
+    "install-and-repair.cmd",
     "engine-ab.mjs",
     "real-tools-probe.mjs",
     "bench.mjs",
@@ -75,19 +83,7 @@
     "tools"
   ],
   "engines": {
-    "node": ">=20"
-  },
-  "peerDependencies": {
-    "@deepseek-ai/dsh-scope": "*",
-    "@deepseek-ai/dsh-tools": "*"
-  },
-  "peerDependenciesMeta": {
-    "@deepseek-ai/dsh-scope": {
-      "optional": false
-    },
-    "@deepseek-ai/dsh-tools": {
-      "optional": false
-    }
-  },
-  "license": "MIT"
+    "node": ">=20",
+    "dsh": ">=0.2.1-rc.2 <0.3.0"
+  }
 }
