@@ -15,7 +15,36 @@ node setup.mjs
 副本 → 复核 profile 不会遮蔽宿主自带的包，最后打印结论。装完完整退出 DSH 再打开。
 
 常用参数：`--profile web`、`--check`（只看不改）、`--app <目录>`（DSH 不在默认位置）。
-不想敲命令就双击 `install-and-repair.cmd`，效果相同。
+不想敲命令就双击 `install-and-repair.cmd`，效果相同。也可以直接装 tarball：
+
+```powershell
+dsh plugin --profile desktop add <解压/下载目录>\local-dsh-computer-use-1.40.2.tgz
+```
+
+### ⚠️ 不要用弹窗里"输包名"的方式装
+
+DSH 的插件框按 **npm 包名**解析，而本项目不在 npm 上：
+
+| npm 上的名字 | 实际是什么 |
+| --- | --- |
+| `dsh-computer-use` | **别人的插件**（仓库 `988hj7tczd-oss/dsh-computer-use`，0.3.1），不是本项目 |
+| `@deepseek-ai/dsh-computer-use` | 官方 `deepseek-harness` 的 provider 注册辅助包（0.1.6-alpha.1），也不是本项目 |
+| `@local/dsh-computer-use` | 本项目的名字，但 `@local` 是不可发布的占位作用域，npm 上不存在 |
+
+在框里输 `dsh-computer-use` 会装到别人的那份老包，然后你会以为"这个插件没修"。本项目的分发
+渠道只有 GitHub Release 的 zip / tarball。
+
+如果确实想让它能"按名字安装"，需要先发布到**你自己拥有的名字**下——包里带了工具，它会把
+所有出现处（`package.json`、`cordis.patch.yml`、presets、doctor、文档）一次性改写一致，然后
+只打包、不发布：
+
+```powershell
+node tools/publish-npm.mjs --name @your-scope/dsh-computer-use --dry-run
+node tools/publish-npm.mjs --name @your-scope/dsh-computer-use
+npm publish dist/@your-scope-dsh-computer-use-1.40.2.tgz --access public
+```
+
+之后用户 `dsh plugin add @your-scope/dsh-computer-use` 即可按名字装。
 
 以 `link:` 安装、插件解压目录在别处（`D:\DSH-Plugins\...` 之类）也**不需要**在插件旁边放任何
 `node_modules`：宿主自带的包按运行中应用的绝对路径解析，见下面的 1.40.2 第三条。解压位置本身

@@ -82,6 +82,29 @@ Cannot find package '@deepseek-ai/dsh-tools' imported from D:\DSH-Plugins\...
 **安装入口**：新增 `setup.mjs`（一条命令完成安装 + 清理 + 复核）、`install-and-repair.cmd`
 与 `fix-profile-links.cmd`（双击即可）。
 
+**安装渠道澄清：npm 上那两个名字都不是本项目。**
+
+有用户用插件框"输包名"安装，装到的是 npm 上的 `dsh-computer-use@0.3.1`——**另一个作者的插件**
+（仓库 `988hj7tczd-oss/dsh-computer-use`），所以看起来"包体还是老的"。本项目的名字是
+`@local/dsh-computer-use`，`@local` 是不可发布的占位作用域，npm 上并不存在。
+
+| npm 上的名字 | 实际是什么 |
+| --- | --- |
+| `dsh-computer-use` | 别人的插件，0.3.1，2026-09-10 最后更新 |
+| `@deepseek-ai/dsh-computer-use` | 官方 `deepseek-harness` 的 provider 注册辅助包 0.1.6-alpha.1 |
+| `@local/dsh-computer-use` | 本项目，未发布 |
+
+- Release 多带一个可直接安装的 tarball：`dsh plugin add <路径>\local-dsh-computer-use-1.40.2.tgz`
+  （实测：安装后 `/computer-use/status` 返回 200、`registrationFailures: 0`）。
+- 新增 `tools/publish-npm.mjs`：要发布到自己名下的包时用它把名字**一次性改写一致**（manifest、
+  bundle patch、presets、doctor、文档），只打包不发布，最后打印 `npm publish` 命令。
+  用 `--name dsh-computer-use-ljl454` 实测：改写 19 个文件后打包 888 KB，装进干净 profile
+  后行正常激活（`fromApplication: true`）。
+- `runtime.host.hostPackages.fromApplication` 改为按**路径**判断（是否落在
+  `<app>\resources\app\dsh\node_modules`），不再依赖"走了哪条解析分支"——装在 profile 里时
+  宿主包也可能由适配层解析到应用目录，旧写法会误报 `false`。
+
+
 
 ## 1.40.1 — 2026-10-22
 

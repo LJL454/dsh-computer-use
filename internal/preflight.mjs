@@ -84,7 +84,9 @@ export function detectHost() {
     hostPackages: {
       tools: hostTools.path,
       toolsVersion: hostTools.version === '' ? null : hostTools.version,
-      fromApplication: hostTools.viaApplication === true,
+      // 按**路径**判断，而不是按"走了哪条解析分支"：装在 profile 里时宿主包可能由适配层
+      // 解析到应用目录，那条路也会失败于上次的标记。
+      fromApplication: /[\\/]resources[\\/]app[\\/]dsh[\\/]node_modules[\\/]/i.test(hostTools.path),
     },
     node: process.versions.node ?? '',
     electron: process.versions.electron ?? null,
