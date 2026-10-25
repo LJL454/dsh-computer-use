@@ -78,8 +78,7 @@ npm publish dist/@your-scope-dsh-computer-use-1.40.3.tgz --access public
   安全软件拦截单独报 `BACKEND_BLOCKED_BY_AV`（`retry: never`），处置建议是提交误报样本。
 
 1.40.2 修的「截图重编码写死会话」「`link:` 安装没有芯片」等内容仍是本版的一部分，见
-[CHANGELOG.md](CHANGELOG.md)；**哪些实测过、哪些没有**见 [VERIFICATION.md](VERIFICATION.md)，
-发布前的隐私自检见 [PRIVACY.md](PRIVACY.md)。
+[CHANGELOG.md](CHANGELOG.md)；**哪些实测过、哪些没有**见 [VERIFICATION.md](VERIFICATION.md)。
 
 ## 1. 它提供什么
 
@@ -233,7 +232,7 @@ node "<插件根>\doctor.mjs" --diagnostic "<报告文件>"
 
 * `backend/parts/*.ps1` 是源码，`backend/worker.ps1` 由 `node tools/build-worker.mjs` 生成；
   `--check` 会挡住“片段改了但没重新生成”。
-* `release-manifest.json` 由 `node tools/pack-candidate.mjs` 生成，`releaseBuildId` 覆盖 60 个生产文件（含安装入口 `setup.mjs`、两个 `.cmd`、`tools/fix-profile-links.ps1`、`VERIFICATION.md`、`PRIVACY.md`）。
+* `release-manifest.json` 由 `node tools/pack-candidate.mjs` 生成，`releaseBuildId` 覆盖 59 个生产文件（含安装入口 `setup.mjs`、两个 `.cmd`、`tools/fix-profile-links.ps1`、`VERIFICATION.md`）。
 * 宿主启动时重新计算并与清单比对；`/status` 的 `runtime.release` 和 doctor 都会显示。
 * 打包器排除 `dist/`、`artifacts/`、`_zips/`、旧 `*.zip`/`*.tgz` 和输出目录，不会把旧发行物再装进新包。
 
@@ -251,7 +250,6 @@ node migration-drill-test.mjs      # 旧 profile 迁移：可修 / 原件缺失 
 node tests/bridge/plugin-test.mjs
 node tests/hardening-test.mjs
 node doctor.mjs --release
-node tools/privacy-scan.mjs        # 发布前：个人路径 / 用户名 / 邮箱 / 凭据前缀
 ```
 
 测试依赖 Node `>=22.15`（`node:module.registerHooks`）；宿主内嵌 Node 与系统 `node.exe` 可能不同，

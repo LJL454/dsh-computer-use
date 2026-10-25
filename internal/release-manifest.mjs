@@ -35,7 +35,6 @@ const ROOT_FILES = [
   'INSTALL.md',
   'README.md',
   'VERIFICATION.md',
-  'PRIVACY.md',
   'LICENSE',
   // 安装入口也是用户会执行的生产文件：1.40.2 里它们变了却不影响 releaseBuildId，
   // 于是“同一个 1.40.2”可以有两种安装行为（研究报告 P1-C）。

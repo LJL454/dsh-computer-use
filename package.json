@@ -34,7 +34,6 @@
     "README.md",
     "INSTALL.md",
     "VERIFICATION.md",
-    "PRIVACY.md",
     "CHANGELOG.md",
     "backend",
     "browser",
@@ -103,8 +102,5 @@
     "@deepseek-ai/dsh-tools": {
       "optional": true
     }
-  },
-  "scripts": {
-    "privacy": "node tools/privacy-scan.mjs"
   }
 }
