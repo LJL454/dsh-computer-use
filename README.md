@@ -107,6 +107,23 @@ npm publish dist/@your-scope-dsh-computer-use-1.40.3.tgz --access public
 没有验证过的组合不要按「应该可以」宣传。`engines.dsh` 只声明实测过的 0.2.x 段；升级宿主后先跑
 `doctor`，再决定是否扩大范围。
 
+`package.json` 的 `dsh.compatibility` 逐版本记录兼容性——范围不代替逐项证据：
+
+```json
+"compatibility": {
+  "dsh": ">=0.2.1-rc.2 <0.3.0",
+  "node": ">=20",
+  "systems": ["win32"],
+  "profiles": ["desktop"],
+  "dshReleases": { "0.2.1-rc.1": "unknown", "0.2.1-rc.2": "compatible", "0.2.1-rc.3": "compatible" },
+  "dshOperations": { "0.2.1-rc.2": { "install": "passed", "start": "passed", "uninstall": "passed", "rollback": "unknown" } }
+}
+```
+
+`dshReleases` 的每个版本只能取 `compatible` / `incompatible` / `unknown`；rc.1 没有实机证据，所以是
+`unknown`，不是猜出来的 `compatible`。`presets/` 是**独立 bundle**（另一个包），上架/引用时插件路径应
+写 `tree/main/.`，不要指向仓库根。
+
 ## 3. 安装
 
 先解压到**长期保留、可读取**的目录。`link:` 安装指向这个目录，安装后不能把它当临时目录删掉。

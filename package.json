@@ -23,7 +23,36 @@
         "@deepseek-ai/dsh-client-ui-slots"
       ]
     },
-    "manifestVersion": 1
+    "manifestVersion": 1,
+    "compatibility": {
+      "dsh": ">=0.2.1-rc.2 <0.3.0",
+      "node": ">=20",
+      "systems": [
+        "win32"
+      ],
+      "profiles": [
+        "desktop"
+      ],
+      "dshReleases": {
+        "0.2.1-rc.1": "unknown",
+        "0.2.1-rc.2": "compatible",
+        "0.2.1-rc.3": "compatible"
+      },
+      "dshOperations": {
+        "0.2.1-rc.2": {
+          "install": "passed",
+          "start": "passed",
+          "uninstall": "passed",
+          "rollback": "unknown"
+        },
+        "0.2.1-rc.3": {
+          "install": "passed",
+          "start": "passed",
+          "uninstall": "unknown",
+          "rollback": "unknown"
+        }
+      }
+    }
   },
   "files": [
     "index.js",

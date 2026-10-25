@@ -2,8 +2,8 @@
   "schema": 1,
   "name": "@local/dsh-computer-use",
   "version": "1.40.3",
-  "builtAt": "2026-10-25T03:41:44.966Z",
-  "releaseBuildId": "a1a4279c099c2b48",
+  "builtAt": "2026-10-25T04:22:54.160Z",
+  "releaseBuildId": "0ba478bcd001764c",
   "files": [
     {
       "name": "backend/bridge.js",
@@ -262,8 +262,8 @@
     },
     {
       "name": "package.json",
-      "bytes": 2748,
-      "sha256": "4b6fe4561485934101dc53c82d2a92ff6f44668f67fdb402af8ab6cc628b3c21"
+      "bytes": 3416,
+      "sha256": "6d84f1a51243e8aa9aa2b24989919a1239cf9eba5532425470e8895b89d7a3ab"
     },
     {
       "name": "presets/cordis.patch.yml",
@@ -282,8 +282,8 @@
     },
     {
       "name": "README.md",
-      "bytes": 17007,
-      "sha256": "4fa8a138612d51f12d2701d8c8e415696fa4fc51323ee95f1a9aa931db03b916"
+      "bytes": 17766,
+      "sha256": "25e2b68e0fdbcb4f9145ede7e1b6bcf1b372c05f78658c047e5ca8b53a3c6bf2"
     },
     {
       "name": "setup.mjs",
