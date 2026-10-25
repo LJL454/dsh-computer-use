@@ -15,7 +15,7 @@
 # presets/cordis.patch.yml，需要时把插件根下的 presets/ 作为独立 bundle 安装。
 # 核心安装不再读取文档/分析运行时路径，预设坏了也不会遮蔽电脑操作本身。
 - insert:
-    - id: computer-use
+    - id: ljl454-computer-use
       name: '@local/dsh-computer-use'
       config:
         # Computer control stays off until the user flips the 电脑操作 chip, per
