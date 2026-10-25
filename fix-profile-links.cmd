@@ -6,22 +6,32 @@ rem `tools` row and the app refuses to start:
 rem     The application could not start or stopped unexpectedly.
 rem     agent-loop (required)  tools ...
 rem
-rem 1.40.2 no longer declares that package as a peer, so re-running the ordinary install
-rem command already removes the copy (pnpm moves it to node_modules\.ignored). Use this
-rem file when the copy is recorded in the profile's own dependency tree, or when you want
-rem to check before touching anything:
-rem     fix-profile-links.cmd -CheckOnly
+rem 1.40.3: repair only, no install. The real logic lives in setup.mjs, which understands
+rem the official app.asar layout (nothing to repair there — the loader resolves peers
+rem itself) and refuses to build junctions into a virtual archive directory.
+rem
+rem   fix-profile-links.cmd              repair the desktop profile
+rem   fix-profile-links.cmd web          repair another profile
+rem   fix-profile-links.cmd -CheckOnly   report only
 setlocal
 chcp 65001 >nul
-set "PS1=%~dp0tools\fix-profile-links.ps1"
-if not exist "%PS1%" (
-  echo [X] tools\fix-profile-links.ps1 is missing next to this file.
-  echo     Unzip the whole package first, then run this again.
+set "HERE=%~dp0"
+set "HERE=%HERE:~0,-1%"
+
+if not exist "%HERE%\setup.mjs" (
+  echo [X] setup.mjs is missing next to this file. Unzip the whole package first.
   pause
   exit /b 2
 )
-echo Repairing the DSH profile ...
-powershell -NoProfile -ExecutionPolicy Bypass -File "%PS1%" %*
+
+set "ARGS=--repair-only"
+if /I "%~1"=="-CheckOnly" (
+  set "ARGS=--check"
+) else if not "%~1"=="" (
+  set "ARGS=--repair-only --profile %~1"
+)
+
+node "%HERE%\setup.mjs" %ARGS%
 set RC=%errorlevel%
 echo.
 if "%RC%"=="0" (
@@ -29,6 +39,5 @@ if "%RC%"=="0" (
 ) else (
   echo [!] Nothing was repaired. Read the lines above.
 )
-echo.
 pause
 exit /b %RC%

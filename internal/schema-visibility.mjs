@@ -9,6 +9,7 @@
  * 不认识 ctx、不认识事件：谁在 agent 创建/销毁时调用它，由入口决定（那边才是装配）。
  */
 import { sessionKey } from './sessions.mjs';
+import { importHostModule, hostResolution, HOST_CODES } from './host-packages.mjs';
 
 /**
  * 宿主 `dsh-scope` 的 `scopeOf(ctx)`：把 Context 上那个按作用域索引的 **key** 取出来。
@@ -25,10 +26,32 @@ import { sessionKey } from './sessions.mjs';
  * @type {((ctx: unknown) => unknown) | undefined}
  */
 let hostScopeOf;
+/** 解析失败时的结构化事实：doctor / status 用它区分“能读到清单”与“真的导入了”。 */
+let hostScopeError;
 try {
-  ({ scopeOf: hostScopeOf } = await import('@deepseek-ai/dsh-scope'));
-} catch {
+  ({ scopeOf: hostScopeOf } = await importHostModule('@deepseek-ai/dsh-scope'));
+} catch (error) {
   hostScopeOf = undefined;
+  hostScopeError = error;
+}
+
+/**
+ * `dsh-scope` 的解析结果。
+ *
+ * 1.40.2 在这里用了裸 `import('@deepseek-ai/dsh-scope')`：`link:` 安装时必然失败，失败又被
+ * `catch` 吞掉，于是 `packageInfo()` 能读到清单、doctor 显示“可解析”，而实际作用域隔离是
+ * 降级的——这正是研究报告里点名的“把导入失败伪装成正常”。1.40.3 改走统一解析器，并把结果
+ * 作为事实报出去。
+ * @returns {{ resolved: boolean, degraded: boolean, code: string, error: string, resolution: unknown }}
+ */
+export function scopeResolution() {
+  return {
+    resolved: typeof hostScopeOf === 'function',
+    degraded: typeof hostScopeOf !== 'function',
+    code: typeof hostScopeOf === 'function' ? '' : (hostScopeError?.code ?? HOST_CODES.PACKAGE_NOT_RESOLVED),
+    error: hostScopeError === undefined ? '' : String(hostScopeError?.message ?? hostScopeError),
+    resolution: hostResolution('@deepseek-ai/dsh-scope') ?? null,
+  };
 }
 
 /**

@@ -13,8 +13,15 @@
  * 看起来权威的"不兼容"。
  */
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolveHostPackageJson } from './host-packages.mjs';
+import {
+  candidateRootDetails,
+  hostResolution,
+  hostRuntimeKind,
+  resolveHostPackageJson,
+  runsInElectron,
+} from './host-packages.mjs';
 
 /** Packages whose versions decide the host contract. */
 export const PEER_SPECIFIERS = ['@deepseek-ai/dsh-tools', '@deepseek-ai/dsh-scope'];
@@ -35,24 +42,28 @@ export function packageInfo(specifier) {
       path,
       version: typeof manifest.version === 'string' ? manifest.version : '',
       name: typeof manifest.name === 'string' ? manifest.name : specifier,
+      runtimeKind: hostRuntimeKind(path),
       error: '',
     };
   } catch (error) {
     // A `link:` install sits outside every node_modules chain, so the bare specifier fails
-    // even though the running application ships the package. Report that copy instead of
-    // "unknown" — it is the one the plugin actually loads (see host-packages.mjs).
+    // even though the running application ships the package. Report the copy the plugin
+    // actually loads (see host-packages.mjs) instead of "unknown".
     const fallback = resolveHostPackageJson(specifier);
     if (fallback !== undefined) {
       try {
         const manifest = JSON.parse(readFileSync(fallback, 'utf8'));
+        const record = hostResolution(specifier);
         return {
           specifier,
           resolvable: true,
           path: fallback,
           version: typeof manifest.version === 'string' ? manifest.version : '',
           name: typeof manifest.name === 'string' ? manifest.name : specifier,
+          runtimeKind: record?.selected?.runtimeKind ?? hostRuntimeKind(fallback),
+          resolutionSource: record?.selected?.source ?? 'candidate',
           error: '',
-          viaApplication: true,
+          viaApplication: (record?.selected?.runtimeKind ?? '').startsWith('desktop'),
         };
       } catch { /* fall through to the unknown result */ }
     }
@@ -62,9 +73,68 @@ export function packageInfo(specifier) {
       path: '',
       version: '',
       name: specifier,
+      runtimeKind: 'unknown',
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+/**
+ * 一次解析的完整事实：运行时类型、来源、是否与宿主同一实例。
+ *
+ * 1.40.2 用“路径里有没有 `resources/app`”猜来源，于是 ASAR、npm、pnpm 每种布局都要单独打补丁；
+ * 这里改用解析记录里的 `runtimeKind` 与 canonical 路径。
+ * @returns {{ runtimeKind: string, resolutionSource: string, sameHostInstance: boolean|null, entries: object }}
+ */
+export function hostContractReport() {
+  const tools = hostResolution('@deepseek-ai/dsh-tools');
+  const scope = hostResolution('@deepseek-ai/dsh-scope');
+  let toolsEntry = tools?.selected ?? null;
+  let scopeEntry = scope?.selected ?? null;
+  const codes = [...new Set([...(tools?.codes ?? []), ...(scope?.codes ?? [])])];
+
+  // 没有任何模块被导入时（离线 doctor），仍然可以说明“宿主在哪、为什么读不到”：
+  // asar 候选存在而当前进程是普通 Node，就是 ASAR_RUNTIME_REQUIRED，而不是“宿主未知”。
+  if (toolsEntry === null) {
+    const candidates = candidateRootDetails();
+    const virtual = candidates.find((candidate) => candidate.virtual === true);
+    if (virtual !== undefined) {
+      toolsEntry = {
+        entry: join(virtual.root, '@deepseek-ai', 'dsh-tools', 'lib', 'index.js'),
+        canonicalEntry: '',
+        packageJson: '',
+        version: '',
+        source: virtual.source,
+        root: virtual.root,
+        runtimeKind: 'desktop-asar',
+      };
+      if (!runsInElectron()) codes.push('ASAR_RUNTIME_REQUIRED');
+    } else if (candidates.length > 0) {
+      const first = candidates[0];
+      toolsEntry = {
+        entry: join(first.root, '@deepseek-ai', 'dsh-tools', 'lib', 'index.js'),
+        canonicalEntry: '',
+        packageJson: '',
+        version: '',
+        source: first.source,
+        root: first.root,
+        runtimeKind: hostRuntimeKind(first.root),
+      };
+    }
+  }
+  let sameHostInstance = null;
+  if (toolsEntry !== null && scopeEntry !== null) {
+    sameHostInstance = toolsEntry.root === scopeEntry.root;
+  }
+  const unresolved = toolsEntry === null;
+  return {
+    runtimeKind: unresolved ? 'unknown' : toolsEntry.runtimeKind,
+    resolutionSource: unresolved ? 'unresolved' : (tools?.selected?.source ?? toolsEntry.source ?? 'candidate'),
+    hostRoot: unresolved ? '' : toolsEntry.root,
+    sameHostInstance,
+    entries: { tools: toolsEntry, scope: scopeEntry },
+    codes: [...new Set(codes)],
+  };
 }
 
 /**
@@ -74,6 +144,7 @@ export function packageInfo(specifier) {
 export function detectHost() {
   const appBoot = packageInfo('@deepseek-ai/dsh-app-boot');
   const hostTools = packageInfo('@deepseek-ai/dsh-tools');
+  const contract = hostContractReport();
   return {
     runtimeVersion: appBoot.version === '' ? null : appBoot.version,
     appBootPath: appBoot.path,
@@ -84,9 +155,14 @@ export function detectHost() {
     hostPackages: {
       tools: hostTools.path,
       toolsVersion: hostTools.version === '' ? null : hostTools.version,
-      // 按**路径**判断，而不是按"走了哪条解析分支"：装在 profile 里时宿主包可能由适配层
-      // 解析到应用目录，那条路也会失败于上次的标记。
-      fromApplication: /[\\/]resources[\\/]app[\\/]dsh[\\/]node_modules[\\/]/i.test(hostTools.path),
+      // 1.40.3：按解析记录的 runtimeKind 判定（desktop-asar / desktop-unpacked / npm-cli /
+      // custom），不再用“路径里有没有 resources/app”这种只认识一种布局的猜测。
+      runtimeKind: contract.runtimeKind,
+      resolutionSource: contract.resolutionSource,
+      hostRoot: contract.hostRoot,
+      sameHostInstance: contract.sameHostInstance,
+      codes: contract.codes,
+      fromApplication: contract.runtimeKind === 'desktop-asar' || contract.runtimeKind === 'desktop-unpacked',
     },
     node: process.versions.node ?? '',
     electron: process.versions.electron ?? null,

@@ -1,4 +1,4 @@
-# 安装与排障（电脑操作 · dsh-computer-use 1.40.2）
+# 安装与排障（电脑操作 · dsh-computer-use 1.40.3）
 
 ## 最快装法：一条命令
 
@@ -9,7 +9,7 @@ node setup.mjs
 在当前目录（解压出来的插件根）执行这一条就够了。它按顺序做三件事，并把结论打出来：
 
 ```text
-== @local/dsh-computer-use@1.40.2 -> profile "desktop"
+== @local/dsh-computer-use@1.40.3 -> profile "desktop"
 == 1/2  dsh plugin add              ← 安装；pnpm 顺手把旧版留下的 dsh-tools 副本挪走
 == 2/2  profile cannot shadow ...   ← 确认 profile 里没有任何会抢先宿主的 @deepseek-ai 副本
 [OK] The profile cannot shadow the host packages. Fully quit DeepSeek Harness, then start it again.
@@ -32,7 +32,40 @@ node setup.mjs
 > 另外，“半套升级不会被放行”已收窄：`assertWorkerContract()` 只覆盖 worker 与
 > release-input 的运行时一致性，完整发行身份由 `release-manifest.json` / `releaseBuildId` 负责。
 
-## 0. 1.40.2 / 1.40.1 改了什么
+## 0. 1.40.3 改了什么
+
+**1.40.3 修的是“官方 ASAR 桌面装完加载不到插件”。** 1.40.1/1.40.2 为了让包管理器不往 profile 里
+落核心包副本，把 `@deepseek-ai/dsh-tools` / `dsh-scope` 的 peer 声明整个删掉了。但 peer 声明不只
+影响包管理器：官方 `dsh-app-boot` 的 `routeLinked()` 正是**读外部 `link:` 插件的 peer 名称**，
+命中才把这个裸说明符交给宿主自己的拦截解析器。声明一删，这条官方通路也跟着没了，只剩插件里的
+手写兜底——而旧兜底只认识 `resources\app\dsh\node_modules` 一种布局：
+
+```text
+官方桌面：resources\app.asar\dsh\node_modules     ← 看不到
+npm CLI ：...\node_modules\@deepseek-ai\dsh\node_modules
+```
+
+`index.js` 第 107 行的顶层 `await importHostModule('@deepseek-ai/dsh-tools')` 因此失败，模块导入
+没完成，`apply()` 从未执行 → 工具与 `/computer-use/*` 路由都不存在（issue #1 / #2 的 404、unknown）。
+
+1.40.3 的改法：
+
+* **optional peers 恢复官方通路**（`peerDependenciesMeta.optional = true`）：官方解析器重新看到这
+  两个名字，包管理器仍不会替你安装副本。运行时仍然必须有它们，缺了会按结构化错误报出来。
+* **解析器重写**（`internal/host-packages.mjs`）：官方通路优先；解析到插件旁/别处的副本时改用活动
+  宿主；兜底锚点覆盖 CLI 入口、`process.resourcesPath`、可执行文件旁的 `app` 与 `app.asar`、npm
+  布局；**选中后初始化失败原样抛出**，不再偷换副本；`DSH_APP_MODULES` 与运行宿主冲突时明确报错。
+* **安装器不再假设展开目录**（`setup.mjs`）：官方 asar 桌面、npm CLI、展开的开发宿主三种布局都认；
+  不再要求 `DeepSeek Harness.exe` 与 `resources\app\...\cli.js` 同时存在；**绝不把 asar 内的虚拟
+  目录做成 junction**；退出码由再次扫描决定。
+* **诊断说人话**（`internal/preflight.mjs` / `internal/doctor.mjs`）：新增
+  `HOST_NOT_IDENTIFIED`、`ASAR_RUNTIME_REQUIRED`、`HOST_INSTANCE_CONFLICT`、
+  `HOST_INSTANCE_MISMATCH`。普通 Node 读不到 asar 不再等于“宿主版本未知”，也不建议重装。
+
+安装命令没有变：`node setup.mjs`（或双击 `install-and-repair.cmd`）。新增排障参数
+`--dsh-cli`、`--host-entry`、`--host-modules`、`--repair-only`、`--json`。
+
+## 0.1 1.40.2 / 1.40.1 改了什么（历史）
 
 **1.40.2 修的是会话被一次截图写死的问题。** 宿主会把超限的截图重编码（带 alpha 的 PNG →
 WebP）后再落盘，而插件过去把**入参**声明的 `mediaType` 写进会话记录，于是记录成了
@@ -68,16 +101,17 @@ is incompatible with dsh 0.2.1-rc.2 ...
 `The application could not start or stopped unexpectedly.` 加上一张 waiting 表——**不点名任何
 插件**，所以很难查。
 
-1.40.1 删掉了这两个 peer（`dsh-scope` 本来就没有被 `import`，一并删掉）。宿主的
-`@deepseek-ai/dsh-tools` 由 loader 的解析适配层提供给插件，不需要 profile 里有副本——这一点
-在“profile 里完全没有该包”的干净环境上实测通过：插件照常加载，工具照常注册。
+1.40.1 删掉了这两个 peer，避免包管理器落副本。**这个动机在 1.40.3 里用 optional 保留了**，但当时
+是整条删掉——于是官方 `routeLinked()` 也读不到声明（见上面 1.40.3 一节）。宿主的
+`@deepseek-ai/dsh-tools` 仍由 loader 的解析适配层提供给插件，profile 里不需要副本；区别只在于
+**声明要留着、并且标成 optional**，官方才有据可依去走拦截解析。
 
 **从 1.39.x / 1.40.0 升级的用户：不用额外跑修复脚本。**
 
 最省事的一条路：**双击包内的 `install-and-repair.cmd`**。它按顺序做两件事，然后提示你重启：
 
 ```text
-1/2  dsh plugin add <这个目录>   ← 安装 1.40.2；pnpm 顺手把残留副本移走
+1/2  dsh plugin add <这个目录>   ← 安装 1.40.3；pnpm 顺手把残留副本移走
 2/2  tools\fix-profile-links.ps1 ← 再确认 profile 里没有任何会抢先的副本
 ```
 
@@ -90,8 +124,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PluginRoot 'tool
 
 ### 为什么"装一遍"通常就够了
 
-安装内部会跑一次 `pnpm install`。1.40.2 不再声明 `@deepseek-ai/dsh-tools` 这个 peer，pnpm 发现
-profile 里那份已经不在依赖树中，会自己把它挪走：
+安装内部会跑一次 `pnpm install`。1.40.3 把 `@deepseek-ai/dsh-tools` 声明成 **optional** peer，
+pnpm 不会替你安装它；发现 profile 里那份已经不在依赖树中，会自己把它挪走：
 
 ```text
 [WARN] Moving @deepseek-ai/dsh-tools to "node_modules\.ignored\@deepseek-ai\dsh-tools".

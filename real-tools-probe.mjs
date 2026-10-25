@@ -16,9 +16,10 @@
  *
  *   node real-tools-probe.mjs
  *   DSH_ASAR="D:\path\app.asar" node real-tools-probe.mjs
+ *   node real-tools-probe.mjs --allow-skip   显式接受"本机没有宿主"并记 NOT EXECUTED
  *
- * Skips (exit 0) when the application is not installed, so the rest of the suite
- * stays runnable on a machine that only has the source.
+ * 找不到 app.asar 时**默认退出码 3（NOT EXECUTED）**：研究报告 §6 指出，旧行为 exit 0
+ * 会让"没跑"看起来像"通过"，而这条用例本来就是要验证真实 defineTool 契约的。
  */
 import { registerHooks } from 'node:module';
 import { mkdirSync, mkdtempSync, openSync, readFileSync, readSync, closeSync, rmSync, writeFileSync } from 'node:fs';
@@ -35,8 +36,14 @@ const ASAR_CANDIDATES = [
 
 const asarPath = ASAR_CANDIDATES.find((candidate) => existsSync(candidate));
 if (asarPath === undefined) {
-  console.log('SKIP: the DeepSeek Harness app.asar was not found; set DSH_ASAR to point at one.');
-  process.exit(0);
+  const allowSkip = process.argv.includes('--allow-skip');
+  console.log('NOT EXECUTED: the DeepSeek Harness app.asar was not found; set DSH_ASAR to point at one.');
+  if (allowSkip) {
+    console.log('             --allow-skip was passed: this run counts as NOT EXECUTED, never as PASS.');
+    process.exit(0);
+  }
+  console.log('             exit 3: pass --allow-skip to acknowledge it in an aggregate run.');
+  process.exit(3);
 }
 
 /* ------------------------------------------------------------------ asar -- */

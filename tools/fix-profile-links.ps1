@@ -33,6 +33,13 @@ $LINKED = @('dsh-tools', 'dsh-scope')
 $appRoot = Join-Path $env:LOCALAPPDATA 'Programs\DeepSeek Harness\resources\app\dsh\node_modules\@deepseek-ai'
 
 if (-not (Test-Path $appRoot)) {
+    $asar = Join-Path $env:LOCALAPPDATA 'Programs\DeepSeek Harness\resources\app.asar'
+    if (Test-Path $asar) {
+        Write-Output 'SKIP: the host runs from resources\app.asar (official layout).'
+        Write-Output '      The official loader resolves @deepseek-ai peers itself; no junction is needed.'
+        Write-Output '      Run `node setup.mjs --check` for the full picture.'
+        exit 0
+    }
     Write-Output "SKIP: host package directory not found: $appRoot"
     Write-Output "      Pass -DshHome and install the plugin on the machine that runs DSH."
     exit 3

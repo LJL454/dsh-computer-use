@@ -29,12 +29,22 @@ const ROOT_FILES = [
   'index.js',
   'client.js',
   'doctor.mjs',
+  'setup.mjs',
   'package.json',
   'cordis.patch.yml',
   'INSTALL.md',
   'README.md',
+  'VERIFICATION.md',
+  'PRIVACY.md',
   'LICENSE',
+  // 安装入口也是用户会执行的生产文件：1.40.2 里它们变了却不影响 releaseBuildId，
+  // 于是“同一个 1.40.2”可以有两种安装行为（研究报告 P1-C）。
+  'install-and-repair.cmd',
+  'fix-profile-links.cmd',
 ];
+
+/** Installer helpers that live under tools/ but are executed by users. */
+const INSTALLER_FILES = ['tools/fix-profile-links.ps1'];
 
 /** Directories whose every file is executed or read at runtime. */
 const RUNTIME_DIRS = ['backend', 'browser', 'internal'];
@@ -103,6 +113,13 @@ export function productionFiles(root = PACKAGE_ROOT) {
     }
   }
   for (const directory of RUNTIME_DIRS) walk(root, directory, names);
+  for (const name of INSTALLER_FILES) {
+    try {
+      if (statSync(join(root, name)).isFile() && isProductionName(name)) names.push(name);
+    } catch {
+      // Missing installer helpers are reported by buildReleaseIdentity, not hidden here.
+    }
+  }
   for (const name of PRESET_FILES) {
     try {
       if (statSync(join(root, name)).isFile() && isProductionName(name)) names.push(name);

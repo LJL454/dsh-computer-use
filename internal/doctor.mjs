@@ -23,6 +23,7 @@ import { POWERSHELL_CANDIDATES, locatePowerShell } from './powershell.mjs';
 import { WORKER_PATH, RELEASE_PATH } from './build-check.mjs';
 import { PACKAGE_ROOT, readPackageManifest, summarizeRelease, verifyRelease } from './release-manifest.mjs';
 import { PEER_SPECIFIERS, packageInfo, satisfies } from './preflight.mjs';
+import { classifySecurityBlock } from './security-block.mjs';
 
 /** Peer packages and their labels. */
 const PEER_LABELS = {
@@ -183,6 +184,29 @@ export function collectDoctorReport({
   }
 
   if (host !== null && typeof host === 'object') {
+    const packages = host.hostPackages ?? {};
+    // 1.40.3：解析事实比“路径里有没有 resources/app”更能说明问题。四种运行时都可能正确，
+    // 只有“认不出宿主”或“两套实例混用”才是故障。
+    if (packages.runtimeKind === 'unknown' && packages.resolutionSource === 'unresolved') {
+      note('warn', 'HOST_NOT_IDENTIFIED',
+        '没有识别出运行中的宿主：既没有官方解析通路，也没有可用的锚点候选。',
+        '在宿主内运行时请检查宿主入口是否可读；离线诊断可显式传 --host-entry 或设置 DSH_APP_MODULES。');
+    }
+    if (Array.isArray(packages.codes) && packages.codes.includes('ASAR_RUNTIME_REQUIRED')) {
+      note('warn', 'ASAR_RUNTIME_REQUIRED',
+        '宿主只以 app.asar 归档形式存在，而当前进程是普通 Node（读不到归档内文件）。',
+        '这不是“装错了”，也不是“宿主版本未知”：改用 Electron 的 Node 模式运行，或在该宿主自己的进程里诊断。');
+    }
+    if (Array.isArray(packages.codes) && packages.codes.includes('HOST_INSTANCE_CONFLICT')) {
+      note('fatal', 'HOST_INSTANCE_CONFLICT',
+        `DSH_APP_MODULES 指向的宿主与运行中的宿主不是同一实例（${packages.hostRoot || '未知'}）。`,
+        '取消 DSH_APP_MODULES，或把它改成运行中的宿主；两套实例混用会让 scope 隔离与工具注册互相错位。');
+    }
+    if (packages.sameHostInstance === false) {
+      note('warn', 'HOST_INSTANCE_MISMATCH',
+        'tools 与 scope 来自不同的 node_modules 根：schema 可见性可能读到另一套作用域。',
+        '让两个包都由同一个宿主解析面提供，不要从两套安装各取一份。');
+    }
     if (host.runtimeVersion === null || host.runtimeVersion === undefined || host.runtimeVersion === '') {
       note('warn', 'HOST_RUNTIME_UNKNOWN',
         '解析不到 @deepseek-ai/dsh-app-boot，无法核对 engines.dsh；这通常意味着插件不是经宿主解析面加载的。',
@@ -221,9 +245,18 @@ export function collectDoctorReport({
           `插件在宿主里运行，却解析不到 peer 依赖 ${specifier}（${peer.error}）。`,
           '确认宿主的运行时解析面覆盖了这个依赖；不要为了消错在插件目录 npm install latest。');
       } else if (label === 'scope') {
-        note('warn', 'SCOPE_PEER_UNRESOLVED',
-          `解析不到 ${specifier}；schema 可见性会走降级路径（${peer.error}）。`,
-          '这是能力退化而不是整个插件失败；确认宿主提供 dsh-scope，或接受降级并检查点开芯片后工具是否出现。');
+        // 宿主里解析不到 scope 是**功能降级**，必须单独报出来：旧版 `catch` 把导入失败吞掉，
+        // 于是 `packageInfo()` 能读到清单、界面显示"可解析"，而实际作用域隔离已经退化
+        // （研究报告里点名的"把导入失败伪装成正常"）。
+        if (hostMode) {
+          note('warn', 'SCOPE_RESOLUTION_DEGRADED',
+            `插件在宿主里运行，却解析不到 ${specifier}（${peer.error}）；schema 可见性降级为"整会话可见"，关闭电脑操作不再省 token。`,
+            '确认宿主解析面覆盖 dsh-scope；不要从插件的 node_modules 里另装一份——两个 scope 实例会让限制与释放对不上。');
+        } else {
+          note('warn', 'SCOPE_PEER_UNRESOLVED',
+            `解析不到 ${specifier}；schema 可见性会走降级路径（${peer.error}）。`,
+            '这是能力退化而不是整个插件失败；确认宿主提供 dsh-scope，或接受降级并检查点开芯片后工具是否出现。');
+        }
       } else {
         note('info', 'PEER_RESOLUTION_OUTSIDE_HOST',
           `裸 Node 下解析不到 ${specifier}（${peer.error}）—— 这是正常的：宿主的运行时解析面覆盖这个 peer，插件在宿主里能不能加载由 /computer-use/doctor 判定。`,
@@ -290,6 +323,17 @@ export function collectDoctorReport({
         '看 /computer-use/probe 的 transport 计数：反复 spawns 增长说明 worker 每次都在启动阶段退出。');
     }
 
+    // 安全软件拦截：必须与"宿主加载失败 / 工具注册失败"分开报（研究报告 P1-B）。
+    const backendText = [backend?.lastError, backend?.stderr, backend?.detail, backend?.exitReason]
+      .filter((part) => typeof part === 'string' && part !== '')
+      .join('\n');
+    const security = classifySecurityBlock(backendText);
+    if (security.blocked) {
+      note('fatal', security.code,
+        `后端被安全软件拦下（${security.vendor}：${security.signature}）；宿主加载与工具注册是另一层，不要混为一谈。`,
+        security.remediation);
+    }
+
     if (schemaVisibility.enabled && schemaVisibility.liveAgents === 0) {
       note('warn', 'NO_LIVE_AGENT',
         '现在没有任何 agent 登记在 schema 可见性这条链上，所以"点开电脑操作"只能走就地释放那条兜底路。',
@@ -319,8 +363,43 @@ export function collectDoctorReport({
 
   const fatal = findings.filter((entry) => entry.level === 'fatal').length;
   const warn = findings.filter((entry) => entry.level === 'warn').length;
+
+  // 分层结论（研究报告 P1-A）：把"找不到宿主 / 导入失败"与"挂载后没注册"和
+  // "worker 起不来"分开计数。任何一层没有执行都要显式说 not-run，不能混进 ok。
+  const hostCodes = Array.isArray(host?.hostPackages?.codes) ? host.hostPackages.codes : [];
+  const resolveStatus = (host?.runtimeVersion ?? null) !== null && hostCodes.length === 0
+    ? 'ok'
+    : hostCodes.length > 0
+      ? 'degraded'
+      : 'failed';
+  const backendTextAll = [backend?.lastError, backend?.stderr, backend?.detail, backend?.exitReason]
+    .filter((part) => typeof part === 'string' && part !== '')
+    .join('\n');
+  const securityVerdict = classifySecurityBlock(backendTextAll);
+  const phases = {
+    resolve: {
+      status: host === null ? 'not-run' : resolveStatus,
+      hostKind: host?.hostPackages?.runtimeKind ?? 'unknown',
+      resolutionSource: host?.hostPackages?.resolutionSource ?? 'unresolved',
+      sameHostInstance: host?.hostPackages?.sameHostInstance ?? null,
+      codes: hostCodes,
+      runtimeVersion: host?.runtimeVersion ?? null,
+    },
+    activate: {
+      status: !hostMode ? 'not-run' : (registrationFailures.length > 0 || registeredToolNames.length === 0 ? 'failed' : 'ok'),
+      registered: registeredToolNames.length,
+      refused: registrationFailures.length,
+    },
+    backend: {
+      status: backend === null ? 'not-run' : (securityVerdict.blocked ? 'blocked' : backend.alive === true ? 'ok' : 'failed'),
+      started: backend?.started === true,
+      alive: backend?.alive === true,
+      security: securityVerdict.blocked ? { vendor: securityVerdict.vendor, signature: securityVerdict.signature } : null,
+    },
+  };
   return {
     ok: fatal === 0,
+    phases,
     plugin: '@local/dsh-computer-use',
     version: effectiveVersion,
     mode,

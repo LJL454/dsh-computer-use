@@ -95,6 +95,7 @@ import {
 } from './internal/tool-contracts.mjs';
 import { createSchemaVisibility } from './internal/schema-visibility.mjs';
 import { collectDoctorReport } from './internal/doctor.mjs';
+import { applyDegraded } from './internal/degraded.mjs';
 
 /**
  * 宿主自带的 `defineTool`，按**绝对路径**解析后取用。
@@ -103,8 +104,37 @@ import { collectDoctorReport } from './internal/doctor.mjs';
  * 模块位于解压目录（`D:\DSH-Plugins\...`），Node 会从那里逐级向上找 `node_modules`，永远
  * 找不到应用里那份；整行随之导入失败，宿主本身却一切正常——用户看到的只是"装好了，但输入框
  * 里没有「电脑操作」按钮"，没有任何报错。解析策略见 internal/host-packages.mjs。
+ *
+ * 失败时**先留一条结构化诊断再抛**（研究报告 P1-A 的短期要求）：此时 `apply()` 还一行都没跑，
+ * 宿主日志里只有一句 import 失败；把 stage / code / 尝试过的候选 / 运行时类型打出来，离线也能
+ * 定位，而不用靠"再装一遍看看"。
+ *
+ * 1.40.3 起不再直接抛出：失败会走 `internal/degraded.mjs` 的**降级挂载**——不带任何工具、
+ * 不启动 worker，只把 `/computer-use/status` 与 `/computer-use/doctor` 挂成 503 + 结构化
+ * 失败原因。"整个 404"与"装好了但没反应"之间，至少要留下一条能读的入口。
  */
-const { defineTool } = await importHostModule('@deepseek-ai/dsh-tools');
+let hostTools = null;
+let bootstrapError = null;
+try {
+  hostTools = await importHostModule('@deepseek-ai/dsh-tools');
+} catch (error) {
+  bootstrapError = error;
+  const diagnostic = {
+    stage: 'resolve/import',
+    specifier: '@deepseek-ai/dsh-tools',
+    code: error?.code ?? 'HOST_PACKAGE_IMPORT_FAILED',
+    message: String(error?.message ?? error),
+    resolution: error?.resolution ?? null,
+    executable: process.execPath ?? '',
+    electron: process.versions.electron ?? null,
+    node: process.versions.node ?? '',
+    at: new Date().toISOString(),
+  };
+  try {
+    console.error(`computer-use: BOOTSTRAP_FAILED ${JSON.stringify(diagnostic)}`);
+  } catch { /* stderr may be gone; the degraded row below still records it */ }
+}
+const defineTool = hostTools?.defineTool;
 
 /** Stable Loader identity. */
 export const name = 'computer-use';
@@ -117,8 +147,11 @@ export const name = 'computer-use';
  * it there would block the tools too, in exactly the deployment where unattended
  * computer control is most useful. The routes register through a scoped
  * `ctx.inject` when a web server is actually present.
+ *
+ * 降级挂载时 `tools` 不可用（正是它导入失败的），所以这里必须为空：否则 row 会停在
+ * PENDING 等一个永远不会出现的服务，连那条只读路由都挂不上。
  */
-export const inject = ['tools'];
+export const inject = bootstrapError === null ? ['tools'] : [];
 
 /**
  * Plugin version echoed by the status route.
@@ -239,6 +272,12 @@ function sendJson(res, status, payload) {
  * @param config - deployment configuration for this plugin row.
  */
 export function apply(ctx, config = {}) {
+  // 降级挂载：宿主依赖没导入成功时，只挂两条只读路由，不注册工具、不启动 worker。
+  if (bootstrapError !== null) {
+    applyDegraded(ctx, config, bootstrapError);
+    return;
+  }
+
   /**
    * §A: one owner per host.
    *

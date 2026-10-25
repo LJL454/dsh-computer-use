@@ -15,9 +15,15 @@
  */
 
 import { ComputerUseBackendError } from '../backend/bridge.js';
+import { classifySecurityBlock } from './security-block.mjs';
 
 export function backendMessage(error) {
   if (error instanceof ComputerUseBackendError) {
+    // 安全软件拦截单独成句：它不是"脚本写错了"，也不该让用户去重装插件（研究报告 P1-B）。
+    const security = classifySecurityBlock(error.message);
+    if (security.blocked) {
+      return `电脑操作后端被安全软件阻止（${security.vendor}：${security.signature}）。${security.remediation}`;
+    }
     // §6 item 4: a worker that was force-killed while it held input is released by an
     // independent process, and whether that worked is part of the answer — "the call was
     // stopped" and "the mouse button you were holding was released" are two different facts.
@@ -50,6 +56,7 @@ export function backendMessage(error) {
  * Order matters: the first match wins.
  */
 export const FAILURE_RULES = [
+  { code: 'BACKEND_BLOCKED_BY_AV', retry: 'never', test: /ScriptContainedMaliciousContent|This script contains malicious content|Antimalware Scan Interface|\bAMSI\b|has been quarantined|blocked by (?:your )?(?:antivirus|antimalware)|was blocked by your system administrator|CodeIntegrity|cannot be run because it is not digitally signed/i, hint: '后端被安全软件（AMSI / Defender / AppLocker）拦住，不是插件挂载失败：不要重装插件、不要关闭 AMSI、也不要让用户长期加排除项。先确认宿主加载与工具注册是否正常；若只有 worker 起不来，按发行说明把样本（版本、文件哈希、这段原文）提交给安全厂商做误报分析。' },
   { code: 'FRONT_NOT_TARGET', retry: 'never', test: /was aimed at hwnd \d+ but the foreground is/i, hint: '合成键盘输入发给了前台窗口，而前台不是你要的那个窗口（通常是刚弹出了对话框）。先把它置前（computer_windows 的 focus_hwnd，或在目标窗口里点一下）再输入；不指定 into_hwnd 时插件会在回执里报告实际收到的窗口。' },
   { code: 'FOREGROUND_REQUIRED', retry: 'never', test: /would go nowhere|no window holds the foreground|no window currently has the foreground/i, hint: '没有任何窗口持有前台，键入会无处可去。先用 computer_windows 列出窗口并 focus_hwnd 置前，或用 computer_launch 打开目标，或在目标窗口里点一下，然后再输入。' },
   { code: 'POINTER_NOT_SETTLED', retry: 'retry', test: /\[POINTER_NOT_SETTLED\]|was moved to .* and is still at/i, hint: '指针移动了但没在时限内停稳——输入是通的，是桌面慢或被占用（不是锁屏）。直接重试这个动作即可。' },

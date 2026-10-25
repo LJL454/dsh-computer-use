@@ -1,5 +1,88 @@
 # 更新记录
 
+## 1.40.3 — 2026-10-25
+
+**修复：官方 ASAR 桌面端与 npm CLI 装完后“加载不到插件”。**（依据《dsh-computer-use 1.40.2：问题研究与可执行修正方案》P0-A / P0-B / P0-C / P1-C）
+
+两个 issue 的入口症状相同：状态路由 404、工具 unknown。根因不在 worker，而在挂载之前——
+插件拿不到宿主共享的 `dsh-tools`，`index.js` 第 107 行的顶层 await 直接失败，`apply()` 从未执行。
+
+- `package.json`：恢复 `@deepseek-ai/dsh-tools` / `@deepseek-ai/dsh-scope` 的 peer 声明，并标为
+  **optional**（`peerDependenciesMeta`）。这是官方 `dsh-app-boot` 的 `routeLinked()` 判断
+  “这个外部链接插件该走宿主拦截解析”的依据；optional 只表示包管理器不必替你安装，不表示
+  运行时可以没有。两者范围与 `engines.dsh` 保持一致，不再用 `*` 冒充兼容。
+- `internal/host-packages.mjs`：解析改成“官方通路优先 + 锚点兜底 + 事实记录”：
+  裸说明符成功且属于活动宿主时直接使用；落到插件旁或别的副本时记 `HOST_PACKAGE_LOCAL_COPY`
+  并改用活动宿主；锚点覆盖 CLI 入口、`process.resourcesPath`、可执行文件旁的 `app` 与
+  `app.asar`、npm 的 `node_modules` 布局；找到包后初始化失败原样抛
+  `HOST_PACKAGE_IMPORT_FAILED`，不再换另一份副本；`DSH_APP_MODULES` 与运行中宿主冲突时抛
+  `HOST_INSTANCE_CONFLICT`。`describeHostEntry()` 现在描述**实际选中**的那份。
+- `internal/schema-visibility.mjs`：`dsh-scope` 从裸 `import` 改为统一解析器，失败时不再被
+  `catch` 静默吞掉——新增 `scopeResolution()`，把 `SCOPE_RESOLUTION_DEGRADED` 作为事实报出去。
+- `internal/preflight.mjs`：`detectHost()` 读解析记录里的 `runtimeKind` / `resolutionSource` /
+  `sameHostInstance`，不再用“路径里有没有 `resources/app`”猜来源；ASAR、npm、unpacked 都算
+  正确宿主。新增 `hostContractReport()`。
+- `internal/doctor.mjs`：新增 `HOST_NOT_IDENTIFIED`、`ASAR_RUNTIME_REQUIRED`、
+  `HOST_INSTANCE_CONFLICT`、`HOST_INSTANCE_MISMATCH` 四条结论。普通 Node 读不到 `app.asar`
+  不再等于“宿主版本未知”，也不再建议重装。
+- `setup.mjs`：不再要求 `DeepSeek Harness.exe` 与 `resources\app\...\cli.js` 同时存在；
+  支持 `--dsh-cli`、`--host-entry`、`--host-modules`、`--repair-only`、`--json`；asar 宿主
+  不做修复（归档内目录不是 Windows 目录，不能建 junction）；退出码由**再次扫描**决定，
+  不再因为“执行过修复”就报成功。
+- `install-and-repair.cmd` / `fix-profile-links.cmd`：改为调用 `setup.mjs`，不再各自实现安装
+  与路径判断；`tools/fix-profile-links.ps1` 遇到官方 asar 布局时明确 SKIP 而不是 exit 3。
+- `internal/release-manifest.mjs`：`setup.mjs`、两个 `.cmd` 安装入口与
+  `tools/fix-profile-links.ps1` 纳入发行身份——安装器变了，`releaseBuildId` 必须跟着变。
+- 新增 `host-contract-test.mjs`（15 条）：optional peers 声明、四种运行时类型的识别、
+  `DSH_APP_MODULES` 的选中与来源记录、以及“找到但初始化失败不得换副本”。
+
+- **诊断分层**（P1-A）：`doctor` 现在输出 `resolve / activate / backend` 三层结论，未观测到的层
+  标 `not-run` 而不是混进 `ok`；宿主内 scope 解析失败改报 `SCOPE_RESOLUTION_DEGRADED`，不再被
+  `catch` 吞成“可解析”。`index.js` 的顶层宿主导入失败时先向 stderr 打一行结构化
+  `BOOTSTRAP_FAILED {stage, code, attempts, runtime}`。
+- **降级挂载**（P1-A 中期）：导入失败不再让整个模块起不来。插件以 `inject: []` 挂上一个只读面，
+  `/computer-use/status` 与 `/computer-use/doctor` 回答 **503 + `{ok:false, state:'failed',
+  stage:'resolve/import', code, resolution}`**——不注册任何工具、不启动 worker，也不假装成功。
+  这样“宿主没加载起来”终于有一个能读的入口，而不是一片 404。
+  真实宿主验证：把 `DSH_APP_MODULES` 指向另一份宿主后，row 仍然挂载成功，`/computer-use/status`
+  返回 **503 + `HOST_INSTANCE_CONFLICT`**（点名“运行中的宿主是 app.asar 那份”），不是 404。
+- **npm 布局识别**：候选根就是 `<...>/node_modules` 时也能认成 `npm-cli`（此前只会落到 `custom`），
+  并用真实 CLI 入口 `process.argv` 锚定，不再依赖“可执行文件旁边猜目录”。
+- **安全软件拦截**（P1-B）：新增 `internal/security-block.mjs`，把 AMSI / Defender 隔离区 /
+  AppLocker·WDAC 的文本识别为 `BACKEND_BLOCKED_BY_AV`（`retry: 'never'`），并与“脚本缺失”“挂载
+  失败”分开叙述；`doctor` 的 backend 层给出 `blocked` 而不是 `failed`，处置建议是提交误报样本，
+  不包含“关闭 AMSI / 长期加排除”这类做法。
+- **`real-tools-probe.mjs`**：找不到 `app.asar` 从 `exit 0` 改为 **`exit 3`（NOT EXECUTED）**；
+  `--allow-skip` 只是显式承认“没跑”，仍然不算 PASS。
+- 新增 `security-block-test.mjs`（11 条）、`degraded-bootstrap-test.mjs`（12 条）、
+  `migration-drill-test.mjs`（14 条），`host-contract-test.mjs` 扩到 19 条（含
+  `HOST_INSTANCE_CONFLICT`、`ASAR_RUNTIME_REQUIRED`、npm 布局的子进程用例）。
+
+**矩阵实测（1.40.3）**
+
+| 场景 | 结果 |
+|---|---|
+| 干净官方 0.2.1-rc.3 ASAR 桌面 + `link:` | `/computer-use/status` **200**，buildId 与清单一致 |
+| 同一发行包从 `路径 测试 #1\`（空格、中文、`#`）安装 | **200** |
+| 桌面宿主 + 矛盾的 `DSH_APP_MODULES` | row 仍挂载，**503 + `HOST_INSTANCE_CONFLICT`**（不是 404） |
+| **npm 安装的 DSH 0.2.1-rc.2 + `link:`** | **200**，`instance.root` 指向解压目录 |
+| **npm 安装的 DSH 0.2.1-rc.2 + tarball（pnpm 11.5.2）** | **200**；profile 内**没有** `@deepseek-ai/dsh-tools` 副本（optional peers 生效），bundle 行自动补齐 |
+| **`npx @deepseek-ai/dsh@0.2.1-rc.2` + `link:`** | **200** |
+| **`pnpm dlx @deepseek-ai/dsh@0.2.1-rc.2` + `link:`** | **200** |
+| 旧 profile 有真实副本 → 宿主原件可用 | 换成指向宿主的 junction，退出 0 |
+| 旧 profile 有真实副本 → 宿主原件缺失 | **退出 1，副本原样保留**（不删、不报成功） |
+| 副本修好但 profile 仍声明依赖 | **退出 1** 并点名声明行 |
+| `setup.mjs --check` | 退出 1（有问题），但一个文件都没动 |
+
+尚未完成（下一轮）：宿主包损坏（缺传递依赖）的实机复现、rc.2 桌面实机（本机只有 rc.3），
+以及 Defender 无排除环境下的 worker 启动。**完整清单与“未验证”项见随包的 `VERIFICATION.md`**
+（按报告 §8 的口径：跳过与未执行不计入 PASS）。
+
+其中 **U2（Defender 无排除项）** 已在 2026-10-25 尝试并记录为“环境受限、不构成有效测试”：
+本机 WinDefend 服务可启动，但实时防护与引擎仍被第三方 AV（第三方实时 AV）压住（`Set-MpPreference` →
+`0x800106ba`、`MpCmdRun -Scan` → `0x80004005`、`AMSIProviderVersion` 为空），因此不能算通过。
+worker 基线本身已跑通（`{"ready":true}` + 截图 2.79 MB，无 AV 签名），详见 `VERIFICATION.md` 的“U2 现场记录”。
+
 ## 1.40.2 — 2026-10-22
 
 **修复：一次大尺寸 PNG 截图会让所在会话永久不可用。**

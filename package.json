@@ -1,10 +1,10 @@
 {
   "name": "@local/dsh-computer-use",
-  "version": "1.40.2",
+  "version": "1.40.3",
   "license": "MIT",
   "author": "LJL454 <134773405+LJL454@users.noreply.github.com>",
   "type": "module",
-  "description": "电脑操作 (computer use) capability for DeepSeek Harness: screenshot, mouse, keyboard, clipboard, app launch, window and UI Automation tools, batched actions, coded failures, plus a 电脑操作 toggle chip in the composer tool row.",
+  "description": "鐢佃剳鎿嶄綔 (computer use) capability for DeepSeek Harness: screenshot, mouse, keyboard, clipboard, app launch, window and UI Automation tools, batched actions, coded failures, plus a 鐢佃剳鎿嶄綔 toggle chip in the composer tool row.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
@@ -33,6 +33,8 @@
     "release-manifest.json",
     "README.md",
     "INSTALL.md",
+    "VERIFICATION.md",
+    "PRIVACY.md",
     "CHANGELOG.md",
     "backend",
     "browser",
@@ -41,6 +43,10 @@
     "cordis.patch.yml",
     "live-tool-test.mjs",
     "schema-test.mjs",
+    "host-contract-test.mjs",
+    "security-block-test.mjs",
+    "degraded-bootstrap-test.mjs",
+    "migration-drill-test.mjs",
     "harness-test.mjs",
     "client-smoke.mjs",
     "lifecycle-test.mjs",
@@ -85,5 +91,20 @@
   "engines": {
     "node": ">=20",
     "dsh": ">=0.2.1-rc.2 <0.3.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-scope": ">=0.2.1-rc.2 <0.3.0",
+    "@deepseek-ai/dsh-tools": ">=0.2.1-rc.2 <0.3.0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-scope": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-tools": {
+      "optional": true
+    }
+  },
+  "scripts": {
+    "privacy": "node tools/privacy-scan.mjs"
   }
 }

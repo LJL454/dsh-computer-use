@@ -1,0 +1,309 @@
+{
+  "plugin": "<plugin-root>",
+  "tools": [
+    {
+      "tool": "browser_state",
+      "params": 6,
+      "required": 0,
+      "optional": [
+        "view",
+        "tab",
+        "filter",
+        "max_nodes",
+        "max_chars",
+        "timeout_ms"
+      ],
+      "outputFields": 18,
+      "chars": 4658,
+      "tokens": 1165,
+      "descriptionChars": 576
+    },
+    {
+      "tool": "browser_actions",
+      "params": 4,
+      "required": 1,
+      "optional": [
+        "tab",
+        "timeout_ms",
+        "state"
+      ],
+      "outputFields": 18,
+      "chars": 3987,
+      "tokens": 997,
+      "descriptionChars": 535
+    },
+    {
+      "tool": "computer_screenshot",
+      "params": 17,
+      "required": 0,
+      "optional": [
+        "window",
+        "require",
+        "display",
+        "all_displays",
+        "region",
+        "region_space",
+        "surface",
+        "clip",
+        "save_path",
+        "scale",
+        "format",
+        "captures",
+        "max_captures",
+        "delay_seconds",
+        "settle_ms",
+        "stability_ms",
+        "stable"
+      ],
+      "outputFields": 46,
+      "chars": 21743,
+      "tokens": 5436,
+      "descriptionChars": 307
+    },
+    {
+      "tool": "computer_actions",
+      "params": 23,
+      "required": 1,
+      "optional": [
+        "screenshot",
+        "state",
+        "wait_for",
+        "evidence",
+        "stop_on_window_change",
+        "expected_transitions",
+        "deadline_ms",
+        "settle_ms",
+        "stability_ms",
+        "stable",
+        "save_path",
+        "scale",
+        "format",
+        "timeout_ms",
+        "poll_ms",
+        "window",
+        "require_window",
+        "display",
+        "region",
+        "region_space",
+        "surface",
+        "clip"
+      ],
+      "outputFields": 16,
+      "chars": 71342,
+      "tokens": 17836,
+      "descriptionChars": 883
+    },
+    {
+      "tool": "computer_click",
+      "params": 10,
+      "required": 2,
+      "optional": [
+        "button",
+        "clicks",
+        "modifiers",
+        "prefer_a11y",
+        "allow_activate",
+        "verify_content",
+        "allow_windows",
+        "from_frame"
+      ],
+      "outputFields": 8,
+      "chars": 4997,
+      "tokens": 1250,
+      "descriptionChars": 471
+    },
+    {
+      "tool": "computer_drag",
+      "params": 11,
+      "required": 0,
+      "optional": [
+        "from_x",
+        "from_y",
+        "to_x",
+        "to_y",
+        "path",
+        "duration_ms",
+        "modifiers",
+        "allow_activate",
+        "verify_content",
+        "allow_windows",
+        "from_frame"
+      ],
+      "outputFields": 5,
+      "chars": 5724,
+      "tokens": 1431,
+      "descriptionChars": 358
+    },
+    {
+      "tool": "computer_scroll",
+      "params": 8,
+      "required": 1,
+      "optional": [
+        "clicks",
+        "x",
+        "y",
+        "from_frame",
+        "allow_activate",
+        "verify_content",
+        "allow_windows"
+      ],
+      "outputFields": 4,
+      "chars": 3468,
+      "tokens": 867,
+      "descriptionChars": 102
+    },
+    {
+      "tool": "computer_type",
+      "params": 2,
+      "required": 1,
+      "optional": [
+        "into_hwnd"
+      ],
+      "outputFields": 2,
+      "chars": 903,
+      "tokens": 226,
+      "descriptionChars": 141
+    },
+    {
+      "tool": "computer_key",
+      "params": 4,
+      "required": 1,
+      "optional": [
+        "into_hwnd",
+        "repeat",
+        "hold_seconds"
+      ],
+      "outputFields": 4,
+      "chars": 1150,
+      "tokens": 288,
+      "descriptionChars": 133
+    },
+    {
+      "tool": "computer_windows",
+      "params": 2,
+      "required": 0,
+      "optional": [
+        "filter",
+        "focus_hwnd"
+      ],
+      "outputFields": 6,
+      "chars": 1234,
+      "tokens": 309,
+      "descriptionChars": 221
+    },
+    {
+      "tool": "computer_ui",
+      "params": 24,
+      "required": 0,
+      "optional": [
+        "hwnd",
+        "filter",
+        "name",
+        "control_type",
+        "automation_id",
+        "max_depth",
+        "max_nodes",
+        "patterns",
+        "skip_empty",
+        "compact",
+        "skip_if_degraded",
+        "since",
+        "prune",
+        "screenshot",
+        "save_path",
+        "scale",
+        "format",
+        "settle_ms",
+        "text",
+        "text_target",
+        "max_text_chars",
+        "max_selected",
+        "captures",
+        "max_captures"
+      ],
+      "outputFields": 20,
+      "chars": 30429,
+      "tokens": 7608,
+      "descriptionChars": 706
+    },
+    {
+      "tool": "computer_ui_action",
+      "params": 13,
+      "required": 1,
+      "optional": [
+        "hwnd",
+        "ref",
+        "automation_id",
+        "name",
+        "control_type",
+        "class_name",
+        "index",
+        "value",
+        "text",
+        "prefix",
+        "suffix",
+        "selection_type"
+      ],
+      "outputFields": 10,
+      "chars": 4411,
+      "tokens": 1103,
+      "descriptionChars": 506
+    },
+    {
+      "tool": "computer_clipboard",
+      "params": 2,
+      "required": 1,
+      "optional": [
+        "text"
+      ],
+      "outputFields": 4,
+      "chars": 751,
+      "tokens": 188,
+      "descriptionChars": 240
+    },
+    {
+      "tool": "computer_paste",
+      "params": 5,
+      "required": 1,
+      "optional": [
+        "restore",
+        "require_restore",
+        "verify",
+        "into_hwnd"
+      ],
+      "outputFields": 9,
+      "chars": 4123,
+      "tokens": 1031,
+      "descriptionChars": 821
+    },
+    {
+      "tool": "computer_launch",
+      "params": 4,
+      "required": 1,
+      "optional": [
+        "arguments",
+        "wait_seconds",
+        "refresh_discovery"
+      ],
+      "outputFields": 16,
+      "chars": 3133,
+      "tokens": 784,
+      "descriptionChars": 333
+    },
+    {
+      "tool": "computer_stop",
+      "params": 2,
+      "required": 0,
+      "optional": [
+        "release_input",
+        "disable_capability"
+      ],
+      "outputFields": 5,
+      "chars": 1064,
+      "tokens": 266,
+      "descriptionChars": 463
+    }
+  ],
+  "familyTokens": 40785,
+  "descriptionTokens": 1706
+}

@@ -211,6 +211,21 @@ if (local.checks.profile !== null) {
   }
 }
 
+console.log('\n== 分层结论 ==');
+const phaseLabels = { ok: '通过', degraded: '降级', failed: '失败', blocked: '被拦截', 'not-run': '未执行' };
+const phase = local.phases ?? null;
+if (phase === null) {
+  console.log('（本版本没有分层结论）');
+} else {
+  const resolve = phase.resolve;
+  console.log(`resolve  ${phaseLabels[resolve.status] ?? resolve.status}  宿主=${resolve.hostKind}  来源=${resolve.resolutionSource}  同实例=${resolve.sameHostInstance === null ? '未知' : (resolve.sameHostInstance ? '是' : '否')}`);
+  if (resolve.codes.length > 0) console.log(`         代码 ${resolve.codes.join('、')}`);
+  const activate = phase.activate;
+  console.log(`activate ${phaseLabels[activate.status] ?? activate.status}  已注册=${activate.registered}  被拒=${activate.refused}${activate.status === 'not-run' ? '（不在宿主内运行，未观测）' : ''}`);
+  const backendPhase = phase.backend;
+  console.log(`backend  ${phaseLabels[backendPhase.status] ?? backendPhase.status}  已启动=${backendPhase.started}  存活=${backendPhase.alive}${backendPhase.security === null ? '' : `  安全软件=${backendPhase.security.vendor}`}`);
+}
+
 console.log('\n== 离线检查结论 ==');
 printFindings(local.findings);
 console.log(`（${local.summary}）`);
