@@ -11,14 +11,16 @@ DeepSeek Harness（DSH）的电脑操作能力：截图、鼠标、键盘、剪�
 node setup.mjs
 ```
 
-它做三件事：`dsh plugin add` 装进 profile → 清掉旧版可能留下的 `@deepseek-ai/dsh-tools`
-副本 → 复核 profile 不会遮蔽宿主自带的包，最后打印结论。装完完整退出 DSH 再打开。
+它先识别宿主布局（官方 `resources\app.asar` 桌面 / 展开的 `resources\app` / npm CLI），再执行
+`dsh plugin add`，然后复核 profile 不会遮蔽宿主自带的包，最后打印结论。装完完整退出 DSH 再打开。
 
-常用参数：`--profile web`、`--check`（只看不改）、`--app <目录>`（DSH 不在默认位置）。
+常用参数：`--profile web`、`--check`（只看不改）、`--repair-only`（只修链接不安装）、
+`--app <目录>`（DSH 不在默认位置）、`--dsh-cli <cli.js>`（npm 安装的 DSH）、
+`--host-modules <dir>`（测试或非常规布局）、`--json`。
 不想敲命令就双击 `install-and-repair.cmd`，效果相同。也可以直接装 tarball：
 
 ```powershell
-dsh plugin --profile desktop add <解压/下载目录>\local-dsh-computer-use-1.40.2.tgz
+dsh plugin --profile desktop add <解压/下载目录>\local-dsh-computer-use-1.40.3.tgz
 ```
 
 ### ⚠️ 不要用弹窗里"输包名"的方式装
@@ -41,13 +43,13 @@ DSH 的插件框按 **npm 包名**解析，而本项目不在 npm 上：
 ```powershell
 node tools/publish-npm.mjs --name @your-scope/dsh-computer-use --dry-run
 node tools/publish-npm.mjs --name @your-scope/dsh-computer-use
-npm publish dist/@your-scope-dsh-computer-use-1.40.2.tgz --access public
+npm publish dist/@your-scope-dsh-computer-use-1.40.3.tgz --access public
 ```
 
 之后用户 `dsh plugin add @your-scope/dsh-computer-use` 即可按名字装。
 
 以 `link:` 安装、插件解压目录在别处（`D:\DSH-Plugins\...` 之类）也**不需要**在插件旁边放任何
-`node_modules`：宿主自带的包按运行中应用的绝对路径解析，见下面的 1.40.2 第三条。解压位置本身
+`node_modules`：宿主自带的包按运行中应用的绝对路径解析，见下面 1.40.3 的解析器那一条。解压位置本身
 不受限制——空格、中文、`#`、深层 Downloads 目录都实测过；`/computer-use/status` 的
 `runtime.host.hostPackages` 会直接写出当前用的是哪一份、什么版本。
 
@@ -55,24 +57,29 @@ npm publish dist/@your-scope-dsh-computer-use-1.40.2.tgz --access public
 > （`preinstall` / `install` / `postinstall` / `prepare` 四个都实测过，一个都没跑），
 > 所以安装动作只能是一条命令或一个双击文件。
 
-版本 **1.40.2**。本版修三个会让能力"看起来装了却用不了"的问题：
+版本 **1.40.3**。这一版修的是「装好了，但加载不到」——官方 ASAR 桌面端和 npm CLI 宿主上，
+插件会在挂载前就失败：`/computer-use/*` 一律 404、工具不存在，宿主本身却一切正常。
 
-* **装完起不来**：旧版把 `@deepseek-ai/dsh-tools` 声明成 `optional: false` 的 peer，
-  包管理器因此往 profile 里落一份实体副本；宿主的 `tools` 行优先从 profile 解析，版本一旦
-  不一致就被 loader 禁用，全体注入 `tools` 的 row 挂起，`agent-loop` 是 required → 启动失败，
-  弹窗还不点名任何插件。现在删掉该 peer，宿主统一用安装目录自带的那份。
-* **一次截图写死会话**：宿主的附件归一化会把超限 PNG 重编码成 WebP，而插件过去把**入参**的
-  `mediaType` 写进会话记录，形成"PNG 标签 + WebP 实体"。宿主每轮重放历史时按字节复核，判
-  `ATTACHMENT_CORRUPT`，该会话此后每一轮都在 step 1 失败。现在 `admitCapture()` 整条 ref
-  透传（`mediaType` / `bytes` / `width` / `height` / `originalDimensions` 同源），
-  `IMAGE_VALUE_SCHEMA` 放行 `originalDimensions`，并加了会咬人的回归测试。
-* **`link:` 安装后没有「电脑操作」按钮**：静态 `import '@deepseek-ai/dsh-tools'` 会从解压目录
-  逐级向上找 `node_modules`，永远找不到应用自带的那份，整个 row 静默不激活——宿主正常，界面
-  里就是没有芯片、没有路由。现在改用 `internal/host-packages.mjs`：先按普通说明符解析，失败
-  就按运行中应用的绝对路径导入，它自己的依赖由 Node 从应用目录解析，插件旁边**不需要副本**。
+* **根因**：1.40.1/1.40.2 为了让包管理器不往 profile 里落 `@deepseek-ai/dsh-tools` 副本，把 peer
+  声明整个删掉了。但 peer 声明不只影响包管理器：官方 `dsh-app-boot` 的 `routeLinked()` 正是读
+  外部 `link:` 插件的 peer 名，命中才把这个裸说明符交给宿主的拦截解析器。声明一删，这条官方
+  通路也没了，只剩手写兜底——而旧兜底只认识 `resources\app\dsh\node_modules` 一种布局。
+* **optional peers 恢复官方通路**：两个 peer 重新声明并标为 `optional`——官方解析器重新看得到，
+  包管理器仍然不会安装副本；范围与 `engines.dsh` 一致。
+* **解析器重写**（`internal/host-packages.mjs`）：官方通路优先；只认活动宿主那一份（落到插件旁
+  或别的副本时记 `HOST_PACKAGE_LOCAL_COPY` 并改用宿主）；锚点兜底覆盖 CLI 入口、
+  `process.resourcesPath`、可执行文件旁的 `app` 与 `app.asar`、npm 布局；**选中后初始化失败
+  原样抛出，不偷换副本**；`DSH_APP_MODULES` 与运行宿主冲突时抛 `HOST_INSTANCE_CONFLICT`。
+* **安装器**：三种宿主布局都认；asar 内虚拟目录**不建 junction**；退出码由「再次扫描」决定，
+  不再按「修过几次」报成功。
+* **降级挂载**：宿主导入失败时插件仍会挂上一个只读面，`/computer-use/status` 与
+  `/computer-use/doctor` 返回 **503 + `{state:'failed', stage, code, resolution}`**，而不是 404。
+* **诊断分层**：`doctor` 输出 `resolve / activate / backend` 三层，未观测的层标 `not-run`；
+  安全软件拦截单独报 `BACKEND_BLOCKED_BY_AV`（`retry: never`），处置建议是提交误报样本。
 
-1.40.0 的内容（重复挂载拒绝、`engines.dsh`、`doctor` 离线/在线分层、全发行 `releaseBuildId`、
-预设拆包等）见 [CHANGELOG.md](CHANGELOG.md)。
+1.40.2 修的「截图重编码写死会话」「`link:` 安装没有芯片」等内容仍是本版的一部分，见
+[CHANGELOG.md](CHANGELOG.md)；**哪些实测过、哪些没有**见 [VERIFICATION.md](VERIFICATION.md)，
+发布前的隐私自检见 [PRIVACY.md](PRIVACY.md)。
 
 ## 1. 它提供什么
 
@@ -90,7 +97,7 @@ npm publish dist/@your-scope-dsh-computer-use-1.40.2.tgz --access public
 
 | 维度 | 已验证 / 要求 |
 | --- | --- |
-| DSH desktop/runtime | `0.2.1-rc.2` 实测通过；manifest 声明 `engines.dsh: >=0.2.1-rc.2 <0.3.0` |
+| DSH desktop/runtime | `0.2.1-rc.3` 桌面（ASAR）与 `0.2.1-rc.2`（npm / npx / pnpm dlx）实测通过；manifest 声明 `engines.dsh: >=0.2.1-rc.2 <0.3.0` |
 | Node（宿主内） | `>=20` 可加载桌面能力；完整浏览器能力需要全局 `WebSocket`（Node 22+ 稳定） |
 | 开发/测试 Node | `>=22.15.0`（测试使用 `node:module.registerHooks`） |
 | 操作系统 | Windows 10/11 x64；SendInput + GDI + UI Automation |
@@ -184,7 +191,7 @@ node "<插件根>\doctor.mjs" --diagnostic "<报告文件>"
 **宿主整体启动失败时，不要用「插件在线 doctor 返回 404」推根因**：404 只说明该 origin/path 没有
 可用路由，可能是错误端口、错误实例、未挂载或加载失败。先读原生报告的“第一个异常”。
 
-### 本版新增的判据
+### 排障判据（1.40.3 新增）
 
 * `DUPLICATE_INSTANCE`：同一宿主第二次挂载在注册前被拒；日志带已有实例的路径/版本和本次路径/版本。
 * `RELEASE_BUILD_MISMATCH`：`release-manifest.json` 与磁盘文件不一致——半套升级/混装。
@@ -194,6 +201,21 @@ node "<插件根>\doctor.mjs" --diagnostic "<报告文件>"
 * `PROFILE_BUNDLE_DUPLICATE`：同一个 bundle 在 `dsh.profile.bundles` 里出现多次。
 * `CORE_PACKAGE_COPY`：profile/插件目录里有核心包副本；确认它指向宿主自带版本。
 * `WEBSOCKET_UNAVAILABLE`：浏览器底层缺全局 WebSocket；桌面工具不受影响。
+
+1.40.3 追加的宿主解析判据（会出现在 `doctor` 的 `resolve` 层与 `/computer-use/status` 的
+`runtime.resolution`）：
+
+| 判据 | 含义 | 下一步 |
+| --- | --- | --- |
+| `HOST_NOT_IDENTIFIED` | 找不到任何宿主包根：从 CLI 入口、`resourcesPath`、可执行文件旁都没找到 | 用 `--dsh-cli` / `--host-entry` 指定入口 |
+| `ASAR_RUNTIME_REQUIRED` | 只找到 `app.asar` 里的包，而当前进程是普通 Node（读不了归档） | 用桌面端的 Electron 进程启动，别用系统 node 跑 |
+| `PACKAGE_NOT_RESOLVED` | 官方通路失败且候选根里没有该包 | 确认安装目录就是运行中的那份 DSH |
+| `HOST_PACKAGE_IMPORT_FAILED` | 找到了包但 `import()` 失败（缺传递依赖、初始化抛错） | 看 error 原文；**不会**改用别的副本 |
+| `HOST_INSTANCE_CONFLICT` | `DSH_APP_MODULES` 指的宿主与运行中的不是同一个 | 取消该环境变量，或指向运行中的那份 |
+| `HOST_INSTANCE_MISMATCH` | 插件记录的活动宿主与本次解析不一致 | 重启 DSH，确认只有一份安装 |
+| `HOST_PACKAGE_LOCAL_COPY` | 官方通路落到了插件旁边的副本 | 删掉该副本；宿主会自己提供 |
+| `SCOPE_RESOLUTION_DEGRADED` | `dsh-scope` 解析失败，schema 可见性降级 | 与 `PACKAGE_*` 同样的排查顺序 |
+| `BACKEND_BLOCKED_BY_AV` | worker 被安全软件拦截（AMSI / 隔离 / AppLocker·WDAC） | 提交误报样本；**不要**关 AMSI 或长期加排除项 |
 
 ## 6. 从三个旧包迁移
 
@@ -211,7 +233,7 @@ node "<插件根>\doctor.mjs" --diagnostic "<报告文件>"
 
 * `backend/parts/*.ps1` 是源码，`backend/worker.ps1` 由 `node tools/build-worker.mjs` 生成；
   `--check` 会挡住“片段改了但没重新生成”。
-* `release-manifest.json` 由 `node tools/pack-candidate.mjs` 生成，`releaseBuildId` 覆盖 51 个生产文件。
+* `release-manifest.json` 由 `node tools/pack-candidate.mjs` 生成，`releaseBuildId` 覆盖 60 个生产文件（含安装入口 `setup.mjs`、两个 `.cmd`、`tools/fix-profile-links.ps1`、`VERIFICATION.md`、`PRIVACY.md`）。
 * 宿主启动时重新计算并与清单比对；`/status` 的 `runtime.release` 和 doctor 都会显示。
 * 打包器排除 `dist/`、`artifacts/`、`_zips/`、旧 `*.zip`/`*.tgz` 和输出目录，不会把旧发行物再装进新包。
 
@@ -222,13 +244,19 @@ node tools/build-worker.mjs --check
 node tests/preset-config-test.mjs
 node test-schema-visibility.mjs
 node schema-test.mjs
+node host-contract-test.mjs        # 宿主契约：peers、四种布局、冲突、asar 运行时
+node security-block-test.mjs       # 安全软件拦截的识别与处置
+node degraded-bootstrap-test.mjs   # 导入失败时仍能回答 503
+node migration-drill-test.mjs      # 旧 profile 迁移：可修 / 原件缺失 / 仍声明依赖 / --check
 node tests/bridge/plugin-test.mjs
 node tests/hardening-test.mjs
 node doctor.mjs --release
+node tools/privacy-scan.mjs        # 发布前：个人路径 / 用户名 / 邮箱 / 凭据前缀
 ```
 
 测试依赖 Node `>=22.15`（`node:module.registerHooks`）；宿主内嵌 Node 与系统 `node.exe` 可能不同，
-不要把系统 Node 的版本当成宿主版本。
+不要把系统 Node 的版本当成宿主版本。这些用例在 `0.2.1-rc.3` 桌面上全绿，具体数字见
+[VERIFICATION.md](VERIFICATION.md)。
 
 ## 9. 权限与边界
 
