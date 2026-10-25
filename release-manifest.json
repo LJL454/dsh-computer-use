@@ -2,8 +2,8 @@
   "schema": 1,
   "name": "@local/dsh-computer-use",
   "version": "1.40.3",
-  "builtAt": "2026-10-25T04:33:33.943Z",
-  "releaseBuildId": "817d80ad5847be92",
+  "builtAt": "2026-10-25T12:32:18.463Z",
+  "releaseBuildId": "d0fc7f9903ea94ba",
   "files": [
     {
       "name": "backend/bridge.js",
@@ -137,8 +137,8 @@
     },
     {
       "name": "INSTALL.md",
-      "bytes": 19789,
-      "sha256": "5ac4d7041049a1b71053240568e74b22a9cbc398add6623ccaeac41750ee4fda"
+      "bytes": 20840,
+      "sha256": "728a152f7ab1c1913a7c1b630f332b7fb5f209ae475309428831ed0dfd09f810"
     },
     {
       "name": "internal/app-launch.js",

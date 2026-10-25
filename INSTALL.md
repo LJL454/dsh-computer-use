@@ -156,6 +156,26 @@ powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PluginRoot 'tool
 
 ## 1. 装
 
+### 1.0 不要用 GitHub 仓库 URL 安装
+
+`dsh plugin --profile desktop add https://github.com/LJL454/dsh-computer-use` 会被 pnpm 当成 **git 依赖**（它要去跑 `git ls-remote`）。本机没有装 git 时直接失败：
+
+```text
+[ERR_PNPM_GIT_RESOLVE_FAILED] Failed to resolve git dependency "https://github.com/LJL454/dsh-computer-use":
+git ls-remote failed: 'git' 不是内部或外部命令，也不是可运行的程序或批处理文件。
+```
+
+这不是插件的问题，是安装方式的问题。两种正确装法都不需要 git：
+
+1. **zip**：下载 Release 里的 `dsh-computer-use-<版本>.zip`，解压后按 §1.1–§1.2 用目录安装（推荐）；
+2. **tarball**：下载 Release 里的 `dsh-computer-use-<版本>.tgz`，用**本地文件路径**安装：
+
+   ```powershell
+   dsh plugin --profile desktop add D:\Downloads\dsh-computer-use-1.40.3.tgz
+   ```
+
+只有直接把 `https://github.com/...` 写进 `add` 才会触发 git。确实要走这种方式，就先装 Git for Windows 并确认 `git` 在 PATH 里。
+
 ### 1.1 解压到稳定目录
 
 把 zip 解压到**长期保留、可读取**的目录，例如：
