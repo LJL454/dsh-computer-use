@@ -35,7 +35,7 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const WORKER = join(HERE, 'backend', 'worker.ps1');
+const WORKER = join(HERE, 'backend', 'dsh-worker.exe');
 // The real bridge, loaded through a query-suffixed URL so the module hook below (which
 // stubs './backend/bridge.js' for the host half) does not catch it.
 const realBridge = await import(`${pathToFileURL(join(HERE, 'backend', 'bridge.js')).href}?lifecycle=1`);
@@ -65,8 +65,8 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 function spawnRawWorker(env = {}) {
   const cancelFile = join(tmpdir(), `dsh-cu-lifecycle-${process.pid}-${Math.random().toString(36).slice(2)}.flag`);
   const child = spawn(
-    POWERSHELL,
-    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', WORKER],
+    WORKER,
+    [],
     { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, DSH_COMPUTER_USE_CANCEL_FILE: cancelFile, ...env } },
   );
   const lines = createInterface({ input: child.stdout });

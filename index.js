@@ -343,7 +343,7 @@ export function apply(ctx, config = {}) {
   }
 
   /**
-   * §G: the whole release identity, not just worker.ps1.
+   * §G: the whole release identity, not just dsh-worker.exe.
    *
    * A full comparison runs asynchronously after mounting; status explicitly reports pending
    * until it finishes. Doctor awaits that same comparison. No file/hash checks are skipped.
@@ -915,7 +915,7 @@ export function apply(ctx, config = {}) {
    *   actions    does it implement the same step actions (the original check)?
    *   protocol   does it speak the same behaviour contract? A worker that answers with an
    *              older meaning is refused rather than driven with arguments it will misread.
-   *   build      is the process running the worker.ps1 that is on disk now? A file replaced
+   *   build      is the process running the dsh-worker.exe that is on disk now? A file replaced
    *              after the worker started is a half-applied upgrade, and the two halves would
    *              then disagree about behaviour with nothing in the conversation to explain it.
    *
@@ -942,7 +942,7 @@ export function apply(ctx, config = {}) {
     if (published.length > 0) {
       const missing = REQUIRED_WORKER_CAPABILITIES.filter((one) => !published.includes(one));
       if (missing.length > 0) {
-        throw new Error(`[PROTOCOL_MISMATCH] this host needs worker capabilities that the running computer-use worker does not have: ${missing.join(', ')} (the worker publishes ${published.length} capabilities, and these are not among them). That is a half-applied upgrade or rollback — index.js and backend/worker.ps1 are not from the same install — so the two halves would disagree about what a reply means. Restore both together (or reinstall the plugin) and restart the desktop app.`);
+        throw new Error(`[PROTOCOL_MISMATCH] this host needs worker capabilities that the running computer-use worker does not have: ${missing.join(', ')} (the worker publishes ${published.length} capabilities, and these are not among them). That is a half-applied upgrade or rollback — index.js and backend/dsh-worker.exe are not from the same install — so the two halves would disagree about what a reply means. Restore both together (or reinstall the plugin) and restart the desktop app.`);
       }
     }
     const reported = typeof instance.info?.build === 'string' ? instance.info.build : '';
@@ -951,14 +951,14 @@ export function apply(ctx, config = {}) {
     // file that really changed still produces a mismatch here.
     const onDisk = await workerBuildOnDiskAsync();
     if (reported !== '' && onDisk !== '' && reported !== onDisk) {
-      throw new Error(`[PROTOCOL_MISMATCH] the running computer-use worker was started from a different build of worker.ps1 than the one on disk now (worker ${reported}, disk ${onDisk}). That is a half-applied upgrade: the file changed after the worker started. Restart the desktop app so both halves load from the same file.`);
+      throw new Error(`[PROTOCOL_MISMATCH] the running computer-use worker was started from a different build of dsh-worker.exe than the one on disk now (worker ${reported}, disk ${onDisk}). That is a half-applied upgrade: the file changed after the worker started. Restart the desktop app so both halves load from the same file.`);
     }
-    // §13.5: the code that actually runs is worker.ps1 *and* the release script the host runs
+    // §13.5: the code that actually runs is dsh-worker.exe *and* the release script the host runs
     // when it force-kills the worker, so both are covered by the build check.
     const releaseReported = typeof instance.info?.releaseBuild === 'string' ? instance.info.releaseBuild : '';
     const releaseOnDisk = await hashFileOnDisk(RELEASE_PATH);
     if (releaseReported !== '' && releaseOnDisk !== '' && releaseReported !== releaseOnDisk) {
-      throw new Error(`[PROTOCOL_MISMATCH] the running computer-use worker was started from a different build of release-input.ps1 than the one on disk now (worker ${releaseReported}, disk ${releaseOnDisk}). That is a half-applied upgrade — and this is the script that releases held input when a worker is killed, so a mismatch here could press the wrong keys. Restart the desktop app so both halves load from the same files.`);
+      throw new Error(`[PROTOCOL_MISMATCH] the running computer-use worker was started from a different build of dsh-worker.exe than the one on disk now (worker ${releaseReported}, disk ${releaseOnDisk}). That is a half-applied upgrade — and this is the executable that releases held input when a worker is killed, so a mismatch here could press the wrong keys. Restart the desktop app so both halves load from the same files.`);
     }
     // The environment half of the capability model: the DPI awareness this process actually got.
     // A process that is not per-monitor aware has its screen coordinates virtualized, which
@@ -1321,7 +1321,7 @@ export function apply(ctx, config = {}) {
         uiReadMs: metrics.uiReadMs,
         waitOutcomes: { ...metrics.waitOutcomes },
         readRetries: metrics.readRetries,
-        // §7.2's counter: how many times worker.ps1 was actually read and hashed. It is the
+        // §7.2's counter: how many times dsh-worker.exe was actually read and hashed. It is the
         // number the caching work is supposed to keep flat while calls keep coming, and a
         // number that cannot be observed is not evidence of anything (§12.2: 验证重复次数下降，
         // 而不仅是偶然耗时下降).

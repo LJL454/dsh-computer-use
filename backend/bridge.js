@@ -1,9 +1,9 @@
 /**
- * Node-side bridge to the long-lived PowerShell backend.
+ * Node-side bridge to the long-lived compiled desktop backend.
  *
  * The worker is spawned once on first use and then answers one JSON line per
- * request, so the ~1s cost of `Add-Type` compiling the P/Invoke helpers is paid
- * a single time per host process rather than per action. A crashed or exited
+ * request. The normal path starts dsh-worker.exe directly without a script host
+ * or runtime source compilation. A crashed or exited
  * worker is discarded and respawned on the next request; requests that were in
  * flight when it died reject with a clear error instead of hanging.
  *
@@ -41,7 +41,7 @@ import { DELIVERY, INTERRUPTION, annotateError, createReceipt } from '../interna
 import { Generation, STOP_BUDGETS, stopGeneration } from './supervisor.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_SCRIPT = join(HERE, 'worker.ps1');
+const DEFAULT_SCRIPT = join(HERE, 'dsh-worker.exe');
 /** The independent release path a force-kill uses before the worker goes away (§6 item 4). */
 const RELEASE_SCRIPT = join(HERE, 'release-input.ps1');
 /** How long that path may take. It sends two events; anything slower is not helping. */
@@ -80,7 +80,8 @@ function defaultCancelFilePath() {
 }
 
 /**
- * One long-lived `powershell -File worker.ps1` conversation.
+ * One long-lived native worker conversation. The historical class name remains
+ * an API alias; only explicit developer fixtures select a PowerShell host.
  *
  * Timeout invariant: `#defaultTimeoutMs` must stay longer than the worker's
  * longest single blocking operation, otherwise a legitimate slow command would be
@@ -92,6 +93,7 @@ function defaultCancelFilePath() {
 export class PowerShellBackend {
   #script;
   #command;
+  #legacyFixture = false;
   #child = null;
   /** 进程创建的注入点（方案 4.1：把 spawn 放在边界适配器上，核心状态测试用可控驱动）。 */
   #spawn;
@@ -146,13 +148,15 @@ export class PowerShellBackend {
   /** What the last force-kill's independent release said. */
   #lastRelease = null;
   constructor(options = {}) {
-    this.#script = options.scriptPath ?? DEFAULT_SCRIPT;
+    this.#script = options.executablePath ?? options.scriptPath ?? DEFAULT_SCRIPT;
+    // Explicit legacy fixtures remain usable by developer tests; production always uses the EXE.
+    this.#legacyFixture = options.powerShell != null || /\.ps1$/i.test(this.#script);
     this.#spawn = typeof options.spawn === 'function' ? options.spawn : spawn;
     this.#stopBudgets = { ...STOP_BUDGETS, ...(options.stopBudgets ?? {}) };
-    this.#command = options.powerShell ?? resolvePowerShell();
+    this.#command = this.#legacyFixture ? (options.powerShell ?? resolvePowerShell()) : this.#script;
     this.#defaultTimeoutMs = options.timeoutMs ?? 30_000;
-    // Startup is slower than any single command (Add-Type compiles the P/Invoke helpers
-    // once), so it gets its own budget. It is a real option rather than a constant because
+    // Startup includes CLR initialization and security scanning, so it gets its
+    // own budget. It is a real option rather than a constant because
     // the timeout path is exactly the one that has to be exercised by a test, and a test
     // cannot wait thirty seconds to watch a failure recover.
     this.#startTimeoutMs = Number.isFinite(options.startTimeoutMs)
@@ -218,14 +222,14 @@ export class PowerShellBackend {
     if (this.#state === 'stopping') await this.#exited();
     if (this.#disposed) throw new ComputerUseBackendError('the computer-use backend has been disposed', 'DISPOSED');
     if (!existsSync(this.#script)) {
-      throw new ComputerUseBackendError(`computer-use worker script not found at ${this.#script}`, 'NO_WORKER_SCRIPT');
+      throw new ComputerUseBackendError(`computer-use worker executable not found at ${this.#script}`, 'NO_WORKER_SCRIPT');
     }
     // A stale marker from an earlier worker would cancel this one's first request.
     this.#clearCancelFile();
     this.#state = 'starting';
     const child = this.#spawn(
       this.#command,
-      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', this.#script],
+      this.#legacyFixture ? ['-NoProfile', '-NonInteractive', '-File', this.#script] : [],
       {
         stdio: ['pipe', 'pipe', 'pipe'],
         windowsHide: true,
@@ -314,7 +318,7 @@ export class PowerShellBackend {
   #securityBlock = null;
   /** 驱动代次：每次成功拉起 worker 递增，诊断里用它对齐"哪一代被拦"。 */
   #driverGeneration = 0;
-  /** worker.ps1 的 SHA256（读一次就缓存）：诊断里要能对上具体文件。 */
+  /** 实际工作进程文件的 SHA256（读一次就缓存）：诊断里要能对上具体文件。 */
   #scriptHashCache = null;
 
   get generation() {
@@ -541,10 +545,9 @@ export class PowerShellBackend {
       }, RELEASE_TIMEOUT_MS);
       timer.unref?.();
       try {
-        child = spawn(this.#command, [
-          '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
-          '-File', RELEASE_SCRIPT, '-StateFile', this.#heldFilePath,
-        ], { windowsHide: true });
+        child = spawn(this.#command, this.#legacyFixture ? [
+          '-NoProfile', '-NonInteractive', '-File', RELEASE_SCRIPT, '-StateFile', this.#heldFilePath,
+        ] : ['--release-input', this.#heldFilePath], { windowsHide: true });
       } catch (error) {
         finish({ ok: false, released: [], error: String(error?.message ?? error) });
         return;
@@ -1048,3 +1051,5 @@ export class PowerShellBackend {
     this.#clearCancelFile();
   }
 }
+
+export { PowerShellBackend as NativeBackend };

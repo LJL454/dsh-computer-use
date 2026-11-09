@@ -133,6 +133,8 @@ writeFileSync(probeScript, [
   // 每次问状态都重新算一次，测试才会用"此刻"的原点去换算坐标。
   '    $live = $canvas.PointToScreen((New-Object System.Windows.Point(0,0)))',
   '    $lines += "origin=" + [int]$live.X + "," + [int]$live.Y',
+  '    $unit = $canvas.PointToScreen((New-Object System.Windows.Point(100,100)))',
+  '    $lines += "scale=" + (($unit.X - $live.X) / 100.0).ToString([Globalization.CultureInfo]::InvariantCulture) + "," + (($unit.Y - $live.Y) / 100.0).ToString([Globalization.CultureInfo]::InvariantCulture)',
   '    $lines += "down=" + $script:down',
   '    $lines += "up=" + $script:up',
   '    $lines += "moves=" + $script:moves.Count',
@@ -245,8 +247,10 @@ try {
    * `ready.txt` 里那份是 Show() 之后立刻算的，窗口还没被系统放稳 —— 用它换算会得到一个已经过期的
    * 偏移，于是工具按错的屏幕坐标去按，夹具也就记录在错的地方。每次动作前重新问一次。
    */
+  let canvasScale = { x: 1, y: 1 };
   const refreshOrigin = () => {
     const state = askFixture();
+    if (state.scale) { const [x,y] = state.scale.split(",").map(Number); if (x > 0 && y > 0) canvasScale = {x,y}; }
     if (typeof state.origin === 'string') {
       const [x, y] = state.origin.split(',').map((one) => Number(one));
       if (Number.isFinite(x) && Number.isFinite(y)) origin = { x, y };
@@ -255,7 +259,7 @@ try {
   };
 
   /** A canvas point (in window/canvas coordinates) as an absolute desktop point. */
-  const at = (x, y) => ({ x: origin.x + x, y: origin.y + y });
+  const at = (x, y) => ({ x: Math.round(origin.x + x * canvasScale.x), y: Math.round(origin.y + y * canvasScale.y) });
 
   /* ------------------------------------------------------------ path drag --- */
   console.log('== a path drag follows the path, not the chord ==');

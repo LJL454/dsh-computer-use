@@ -1,12 +1,7 @@
-﻿# Build and packaging output
+# Build and packaging output
 dist/
 *.zip
 *.tgz
-
-# 发布归档的暂存目录：里面是 `*-github.zip` 与它的校验和，属于 Release 附件，不进仓库。
-# 校验和本身也跟着归档走——单独提交一个"指向仓库里并不存在的文件"的 sha256 只会让人困惑。
-_zips/
-*.zip.sha256.txt
 
 # Test and diagnostic run output
 artifacts/
@@ -30,11 +25,3 @@ _live-out.txt
 
 # Never in the repo
 node_modules/
-
-# 本地验证截图（几十 MB，不入库）
-.verify-shots/
-
-# 原生编译中间件
-*.obj
-*.pdb
-*.ilk

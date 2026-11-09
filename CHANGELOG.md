@@ -1,3 +1,7 @@
+## 1.50.1 原生后端构建（2026-11-10）
+
+桌面后端改为随包提供的独立编译程序 backend/dsh-worker.exe，保留原有协议与功能。正常运行不再启动 PowerShell 或动态编译 C#；Windows 需具备 .NET Framework 4.8。开发构建命令为 node native/worker/build.mjs，安装用户不需要 SDK。版本号保持 1.50.1，以 releaseBuildId 和文件哈希区分构建；已发布到 npm 的同名同版本不能覆盖，此次先交付本地安装包。
+
 # 更新记录
 
 ## 1.50.1（2026-11-09 同版本优化）：减少无效往返与区分等待来源

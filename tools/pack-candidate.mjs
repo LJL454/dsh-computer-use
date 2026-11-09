@@ -68,6 +68,15 @@ const REQUIRED = productionFiles(PLUGIN);
 const sha256 = (path) => createHash('sha256').update(readFileSync(path)).digest('hex');
 
 const failures = [];
+// Native C# sources and the executable must describe one build. No runtime compilation.
+try {
+  const nativeRoot = join(PLUGIN, 'native', 'worker');
+  const build = JSON.parse(readFileSync(join(nativeRoot, 'build-info.json'), 'utf8'));
+  if (build.executableSha256 !== sha256(join(PLUGIN, 'backend', 'dsh-worker.exe'))) failures.push('native executable differs from its build record');
+  for (const [name, expected] of Object.entries(build.sources)) {
+    if (sha256(join(nativeRoot, name)) !== expected) failures.push(`native source changed without rebuilding: ${name}`);
+  }
+} catch (error) { failures.push(`native build verification failed: ${error.message}`); }
 for (const name of REQUIRED) {
   try {
     statSync(join(PLUGIN, ...name.split('/')));
@@ -106,7 +115,7 @@ const identity = buildReleaseIdentity(PLUGIN);
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'artifacts', '.git', '_zips', 'coverage', '.cache',
   '.verify-shots', 'baseline']);
 /** File names that are previous releases or packer scratch. */
-const ARTIFACT_SUFFIXES = ['.zip', '.tgz', '.tar', '.gz', '.7z', '.sha256', '.sha256.txt'];
+const ARTIFACT_SUFFIXES = ['.zip', '.tgz', '.tar', '.gz', '.7z', '.sha256', '.sha256.txt', '.obj', '.pdb', '.rsp', '.log'];
 const ARTIFACT_NAMES = new Set([MANIFEST_NAME]);
 
 /**
@@ -125,6 +134,8 @@ function walk(dir, list = []) {
       continue;
     }
     const lower = entry.name.toLowerCase();
+    // Probe output belongs in validation evidence, not in the distributable.
+    if (/^native\/indicator-probe\/build\/report-[^/]+\.json$/i.test(relative(PLUGIN, full).split('\\').join('/'))) continue;
     // release-manifest.json is the one generated file that *is* shipped; it is named apart
     // from the previous-release artifacts so the check can tell the two apart.
     if (!ARTIFACT_NAMES.has(entry.name) && ARTIFACT_SUFFIXES.some((suffix) => lower.endsWith(suffix))) continue;
@@ -139,7 +150,7 @@ const files = walk(PLUGIN)
   // needs — but the *runtime* set is what the build check covers, and the two are named apart.
   .map((path) => ({ path, name: relative(PLUGIN, path).split('\\').join('/') }));
 
-const worker = identity.files.find((entry) => entry.name === 'backend/worker.ps1');
+const worker = identity.files.find((entry) => entry.name === 'backend/dsh-worker.exe');
 const manifest = {
   name: packageJson.name,
   version: packageJson.version,

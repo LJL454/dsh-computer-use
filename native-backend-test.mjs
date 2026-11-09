@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import {NativeBackend} from './backend/bridge.js';
+import {createHash}from'node:crypto';
+import {readFileSync,writeFileSync,mkdtempSync,existsSync,rmSync}from'node:fs';
+import {join,dirname}from'node:path';import{tmpdir}from'node:os';import{fileURLToPath}from'node:url';import{spawnSync}from'node:child_process';
+const root=dirname(fileURLToPath(import.meta.url));const exe=join(root,'backend/dsh-worker.exe');const dir=mkdtempSync(join(tmpdir(),'dsh-native-contract-'));
+const b=new NativeBackend({timeoutMs:10000,cancelGraceMs:1500,cancelFilePath:join(dir,'cancel.flag'),heldFilePath:join(dir,'held.json')});const results=[];
+async function test(name,fn){try{await fn();results.push({name,ok:true});console.log('PASS '+name)}catch(e){results.push({name,ok:false,error:e.stack});console.error('FAIL '+name+': '+e.message)}}
+try{
+ await test('compiled worker readiness, identities and action contract',async()=>{const ready=await b.start();assert.equal(ready.backend,'native');assert.equal(ready.protocol,2);assert.equal(ready.frameProtocol,2);const hash=createHash('sha256').update(readFileSync(exe)).digest('hex').slice(0,16);assert.equal(ready.build,hash);assert.equal(ready.releaseBuild,hash);assert.equal(ready.actions.length,30);assert.equal(ready.uiaActions.length,18);assert.ok(ready.screens.every(s=>typeof s==='object'&&s.width>0));});
+ await test('worker process does not load PowerShell engine',async()=>{const code=`$p=Get-Process -Id ${b.info.pid}; @($p.Modules | ForEach-Object {$_.ModuleName}) | ConvertTo-Json -Compress`;const r=spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',code],{encoding:'utf8',windowsHide:true});assert.equal(r.status,0,r.stderr);const mods=JSON.parse(r.stdout.trim());assert.ok(!mods.some(m=>/System\.Management\.Automation|pwrsh|powershell/i.test(m)));});
+ await test('negative coordinates are refused before any desktop input',async()=>{await assert.rejects(b.request('click',{x:-10000000,y:-10000000,preferA11y:false}),/outside|desktop|screen|point/i);});
+ await test('unknown batch actions are rejected',async()=>{await assert.rejects(b.request('batch',{steps:[{action:'invalid-native-action'}]}),/unknown|BAD_REQUEST/i);});
+ await test('wait cancellation stops current request and permits next request',async()=>{const c=new AbortController();const request=b.request('wait',{seconds:10},{signal:c.signal});setTimeout(()=>c.abort(),120);await assert.rejects(request,/cancel|abort/i);assert.equal((await b.request('ping')).ready,true);});
+ await test('deadline stops later batch steps',async()=>{const r=await b.request('batch',{steps:[{action:'wait',seconds:0.3},{action:'wait',seconds:0.3}],deadlineMs:100});assert.ok(r.failedAt>=0||r.outOfBudget||r.deadlineMet===false,JSON.stringify(r));assert.ok(r.count<2);});
+ await test('file condition transitions from false to true',async()=>{const file=join(dir,'arrived.txt');const timer=setTimeout(()=>writeFileSync(file,'ready'),150);try{const r=await b.request('wait_for',{condition:{kind:'file',path:file},timeoutMs:2000,pollMs:30});assert.equal(r.satisfied,true);}finally{clearTimeout(timer)}});
+ await test('independent release accepts empty state without sending inputs',async()=>{const file=join(dir,'empty.json');writeFileSync(file,JSON.stringify({pid:123,keys:[],buttons:[]}));const r=spawnSync(exe,['--release-input',file],{encoding:'utf8',windowsHide:true});assert.equal(r.status,0,r.stderr);assert.deepEqual(JSON.parse(r.stdout).released,[]);assert.equal(existsSync(file),false);});
+ await test('independent release rejects damaged state without deleting evidence',async()=>{const file=join(dir,'damaged.json');writeFileSync(file,'{');const r=spawnSync(exe,['--release-input',file],{encoding:'utf8',windowsHide:true});assert.equal(r.status,2);assert.equal(JSON.parse(r.stdout).ok,false);assert.equal(existsSync(file),true);});
+ await test('unknown frame identifiers are refused',async()=>{await assert.rejects(b.request('click',{fromFrame:'previous-worker-frame',x:-10000000,y:-10000000}),/frame|unknown|stale/i);});
+ await test('clean shutdown',async()=>{assert.equal((await b.request('shutdown')).bye,true)});
+}finally{await b.dispose();const report=process.env.DSH_NATIVE_TEST_REPORT;if(report)writeFileSync(report,JSON.stringify(results,null,2));rmSync(dir,{recursive:true,force:true});}
+const failed=results.filter(r=>!r.ok);console.log(`${results.length-failed.length} passed, ${failed.length} failed`);process.exitCode=failed.length?1:0;

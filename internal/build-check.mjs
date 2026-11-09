@@ -6,9 +6,8 @@
  *
  * 两条规矩：
  *
- *   1. **覆盖实际执行的全部代码**：`worker.ps1`（11.7k 行、被 dot-source 的长驻进程）与
- *      `release-input.ps1`（worker 被强杀时宿主亲自跑的那一个）。两个都要比哈希，因为两半
- *      版本不一致时"能跑"不等于"跑对了"。
+ *   1. **覆盖实际执行的全部代码**：长驻 worker 与独立输入释放都由 `dsh-worker.exe`
+ *      实现。协议仍分别报告两个身份，但现在它们必须匹配同一个 EXE 的哈希。
  *   2. **读取有成本，所以有记忆，但记忆是可关的**：每次调用都同步读 606 KB 是 §7.2 要修的
  *      高频路径开销；这里改成异步读 + 按"文件身份（dev/ino/size/mtime）"记忆 + 30 秒上限，
  *      并留一个开关（`verifyWorkerBuildEveryCall`）在排查时退回"每次都真读"。
@@ -18,16 +17,16 @@ import { readFileSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
-/** 工作进程脚本的位置。 */
-export const WORKER_PATH = fileURLToPath(new URL('../backend/worker.ps1', import.meta.url));
+/** 编译后工作进程的位置。 */
+export const WORKER_PATH = fileURLToPath(new URL('../backend/dsh-worker.exe', import.meta.url));
 
 /**
- * 宿主自己执行的第二个脚本（`backend/release-input.ps1`）。
+ * 宿主执行独立输入释放时使用同一个 EXE 的 --release-input 模式。
  *
  * 它在 worker 被强杀的瞬间运行，所以是版本不一致里最危险的一处：它按记录按键，而记录来自
  * 另一个构建的话，按下去的可能是用户从没按过的键。
  */
-export const RELEASE_PATH = fileURLToPath(new URL('../backend/release-input.ps1', import.meta.url));
+export const RELEASE_PATH = fileURLToPath(new URL('../backend/dsh-worker.exe', import.meta.url));
 
 /**
  * 一个文件的构建标识，原样读盘。

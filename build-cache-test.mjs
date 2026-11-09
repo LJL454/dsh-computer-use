@@ -25,13 +25,24 @@ import { dirname, join } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const WORKER = join(HERE, 'backend', 'worker.ps1');
-const RELEASE = join(HERE, 'backend', 'release-input.ps1');
 const shimDir = mkdtempSync(join(tmpdir(), 'dsh-cu-build-'));
+// Use writable installed-file fixtures: Windows locks the running EXE image.
+// The real native worker still reports its actual build; only the disk-check paths
+// are injected, with byte-identical copies, to model a replacement installation.
+const WORKER = join(shimDir, 'worker-build.exe');
+const RELEASE = join(shimDir, 'release-build.exe');
+const bytes = readFileSync(join(HERE, 'backend', 'dsh-worker.exe'));
+writeFileSync(WORKER, bytes); writeFileSync(RELEASE, bytes);
+const buildCheck = join(shimDir, 'build-check.mjs');
+const moduleSource = readFileSync(join(HERE, 'internal', 'build-check.mjs'), 'utf8')
+  .replace("fileURLToPath(new URL('../backend/dsh-worker.exe', import.meta.url))", JSON.stringify(WORKER))
+  .replace("fileURLToPath(new URL('../backend/dsh-worker.exe', import.meta.url))", JSON.stringify(RELEASE));
+writeFileSync(buildCheck, moduleSource);
 const toolsStub = join(shimDir, 'dsh-tools-stub.mjs');
 writeFileSync(toolsStub, 'export const defineTool = (definition) => definition;\n');
 registerHooks({
   resolve(specifier, context, nextResolve) {
+    if (specifier.endsWith('/build-check.mjs')) return { url: pathToFileURL(buildCheck).href, shortCircuit: true };
     if (specifier === '@deepseek-ai/dsh-tools') return { url: pathToFileURL(toolsStub).href, shortCircuit: true };
     return nextResolve(specifier, context);
   },
@@ -104,7 +115,7 @@ try {
   appendFileSync(WORKER, '\n# build-cache-test: this line changes the file while a worker is running\n', 'utf8');
   const mismatch = await run('computer_windows', {});
   check('the replaced file is refused', mismatch.error !== undefined, JSON.stringify(mismatch.value ?? null).slice(0, 120));
-  check('and the refusal names the two builds', /different build of worker\.ps1/.test(mismatch.error ?? ''), String(mismatch.error).slice(0, 200));
+  check('and the refusal names the two builds', /different build of dsh-worker\.exe/.test(mismatch.error ?? ''), String(mismatch.error).slice(0, 200));
   check('it says what to do about it', /Restart the desktop app/.test(mismatch.error ?? ''), String(mismatch.error).slice(-120));
   const duringBreak = await buildReads();
   check('that took a real read, not a remembered one', duringBreak > after, JSON.stringify({ after, duringBreak }));
@@ -119,7 +130,7 @@ try {
   appendFileSync(RELEASE, '\n# build-cache-test: this line changes the release script\n', 'utf8');
   const releaseMismatch = await run('computer_windows', {});
   check('a replaced release script is refused', releaseMismatch.error !== undefined, JSON.stringify(releaseMismatch.value ?? null).slice(0, 120));
-  check('and the refusal names that script', /release-input\.ps1/.test(releaseMismatch.error ?? ''), String(releaseMismatch.error).slice(0, 240));
+  check('and the refusal names that script', /dsh-worker\.exe/.test(releaseMismatch.error ?? ''), String(releaseMismatch.error).slice(0, 240));
   check('and says why it matters', /press the wrong keys|releases held input/i.test(releaseMismatch.error ?? ''), String(releaseMismatch.error).slice(0, 260));
   writeFileSync(RELEASE, releaseOriginal);
   await sleep(20);

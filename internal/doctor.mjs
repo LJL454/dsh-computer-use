@@ -147,16 +147,16 @@ export function collectDoctorReport({
 
   if (!worker.exists) {
     note('fatal', 'WORKER_SCRIPT_MISSING',
-      `后台脚本不在：${worker.path}。包没有按插件根解压时最容易出现这一条。`,
-      '按 INSTALL.md 重新解压，确认 backend/worker.ps1 与 backend/release-input.ps1 都在。');
+      `后台可执行文件不在：${worker.path}。包没有按插件根解压时最容易出现这一条。`,
+      '按 INSTALL.md 重新解压，确认 backend/dsh-worker.exe 与 backend/dsh-worker.exe.config 都在。');
   }
 
   // 1.39.5 的 doctor 采集了 release 状态，却只对 worker 缺失报 fatal：隔离副本删掉
   // release-input.ps1 后仍然 ok=true（方案 §H 已复现）。这里把它变成阻断项。
   if (!releaseScript.exists) {
     note('fatal', 'RELEASE_SCRIPT_MISSING',
-      `释放脚本不在：${releaseScript.path}。worker 被强杀时宿主会亲自运行它来释放按住的键；缺了它，那条路径只能失败。`,
-      '按 INSTALL.md 重新解压完整包；不要只复制 worker.ps1。');
+      `输入释放后端不在：${releaseScript.path}。worker 被强杀时宿主会亲自运行它来释放按住的键；缺了它，那条路径只能失败。`,
+      '按 INSTALL.md 重新解压完整包；不要只复制单个可执行文件。');
   }
 
   if (!releaseReport.present) {
@@ -280,20 +280,7 @@ export function collectDoctorReport({
     }
   }
 
-  if (!powershell.found) {
-    note('fatal', 'POWERSHELL_MISSING',
-      `找不到可用的 PowerShell（尝试过：${POWERSHELL_CANDIDATES.join('、')}）；worker 起不来时，每个 computer_* 调用都会失败。`,
-      '确认 %SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe 存在；企业策略移除 Windows PowerShell 的机器上需要单独装回来。');
-  } else if (powershell.source === 'path') {
-    note('info', 'POWERSHELL_FROM_PATH',
-      `PowerShell 从 PATH 解析为 ${powershell.command}。`,
-      '这条路径可用；如果它不是 Windows PowerShell 5.1，截图/UIA 可能缺 GAC 程序集，doctor 的后续能力检查会暴露。');
-  }
-  if (powershell.found && /(^|[\\/])pwsh(\.exe)?$/i.test(powershell.command)) {
-    note('warn', 'POWERSHELL_7_SELECTED',
-      `只找到 PowerShell 7（${powershell.command}）；它不保证带 GAC 里的 WinForms / Drawing / UI Automation 程序集。`,
-      '优先安装/保留 Windows PowerShell 5.1；PowerShell 7 不是 Windows PowerShell 的无条件等价替换。');
-  }
+  // The desktop worker is a compiled EXE. PowerShell availability is informational only.
 
   if (!browser.webSocket || !browser.fetch) {
     note('warn', 'BROWSER_CAPABILITY_MISSING',

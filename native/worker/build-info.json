@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "target": "net48-x64",
+  "sdk": "7.0.401",
+  "executableSha256": "41e53fcfb0f2521e2f03299cccab83360802675b517eb27a8f0f87e6ff687000",
+  "sources": {
+    "Program.cs": "43e2c7b1f4569f90c4d0e053099ae20e137b7e1179778037f6a39d2805b0e60c",
+    "Runtime.cs": "a32722a720a90c2dd4dc8969395f7369a29f22b6f02e98a8eb54b05df200b9ca",
+    "Worker.Generated.cs": "01757f8abb0f0963b6f39f6abb5226ed212af954a4f7b7d513905d97c9ee1662",
+    "nativeSource.cs": "cf26cea300a3e26df9ff3d022dc8611a62e54593d0f9db66bc4fe646d043e694",
+    "uiaComSource.cs": "ef3ddcdff3bf806062b741b6caa5a66a37c0a04e3c80665aed2f51b129dba600"
+  }
+}

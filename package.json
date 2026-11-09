@@ -119,7 +119,13 @@
     "assets",
     "native/indicator-helper/build/dsh-interaction-indicator.exe",
     "startup-performance-test.mjs",
-    "call-cadence-test.mjs"
+    "call-cadence-test.mjs",
+    "native-backend-test.mjs",
+    "native/worker/*.cs",
+    "native/worker/build.mjs",
+    "native/worker/README.md",
+    "native/worker/migration-coverage.json",
+    "native/worker/build-info.json"
   ],
   "engines": {
     "node": ">=20",

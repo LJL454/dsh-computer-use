@@ -1,3 +1,7 @@
+## 1.50.1 原生后端构建（2026-11-10）
+
+桌面后端改为随包提供的独立编译程序 backend/dsh-worker.exe，保留原有协议与功能。正常运行不再启动 PowerShell 或动态编译 C#；Windows 需具备 .NET Framework 4.8。开发构建命令为 node native/worker/build.mjs，安装用户不需要 SDK。版本号保持 1.50.1，以 releaseBuildId 和文件哈希区分构建；已发布到 npm 的同名同版本不能覆盖，此次先交付本地安装包。
+
 # dsh-computer-use
 
 DeepSeek Harness（DSH）的电脑操作能力：截图、鼠标、键盘、剪贴板、窗口与 UI Automation、应用启动、
@@ -14,7 +18,9 @@ DeepSeek Harness（DSH）的电脑操作能力：截图、鼠标、键盘、剪�
 
 三条路，任选一条。装完都要**完全退出 DSH 再打开**——桌面端只在启动时组合 profile。
 
-### 方式一：npm（推荐）
+### 方式一：npm（已发布的旧构建）
+
+本次原生后端构建保持 1.50.1，尚未发布到 npm；同名同版本不能覆盖。安装本次构建请使用随交付提供的本地 TGZ，或下方的源码目录方式。
 
 ```powershell
 # 装进 DSH 的 profile（把桌面能力交给宿主管理）
@@ -82,7 +88,7 @@ dsh plugin --profile desktop add (Join-Path $PluginRoot 'presets')
 - **物理 Esc 真能停**：就绪状态来自键盘钩子本身，不再"假装可用"；按代次隔离，迟到的旧消息不会污染新任务。
 - **指针保真**：按钮边沿改成有序事件队列，20,000 组自检；快速点击、多键交错、拖出去又拖回来都算得准。
 - **更安静**：启动不再堵宿主（发行校验延后约 2 秒、CDP 按需加载），静态画面 CPU 从 25% 降到 0%。
-- **AMSI / Defender 误报已解决**：曾被判成 `HackTool:PowerShell/EmpireGetScreenshot.C` 拦在启动；已向微软提交误报样本，特征修正后实测不再命中（没关 AMSI、没加排除项）。
+- **后端独立编译**：默认执行 `backend/dsh-worker.exe`，不再加载旧 PowerShell worker。旧脚本曾触发 `HackTool:PowerShell/EmpireGetScreenshot.C`；微软的样本复核结论不能代替具体构建在无允许项、无排除项环境中的运行验证，结果以本次交付报告为准。
 - 工具仍是 `computer_*` 那 23 个，调用方式与 1.40.3 完全一致。
 
 ## 它提供什么

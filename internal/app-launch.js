@@ -14,6 +14,8 @@
  * is it (single-instance apps hand off to a sibling process).
  */
 import { spawn, spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+const NATIVE_INSPECTOR = fileURLToPath(new URL('../backend/dsh-worker.exe', import.meta.url));
 import { existsSync, statSync } from 'node:fs';
 import { basename, extname, isAbsolute, join } from 'node:path';
 
@@ -117,8 +119,8 @@ function quote(value) {
  * processes that are alive and own a visible window.
  */
 export function inspectWindows(pid, imageName, powershell = 'powershell.exe', since = 0) {
-  const script = inspectWindowsScript(pid, imageName, since);
-  const result = spawnSync(powershell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
+  const inspectorArgs = ['--inspect-windows', String(Number(pid) || 0), String(imageName ?? ''), String(Number(since) || 0)];
+  const result = spawnSync(NATIVE_INSPECTOR, inspectorArgs,
     { encoding: 'utf8', timeout: 30000, windowsHide: true });
   return parseWindowReport(result);
 }
@@ -134,11 +136,11 @@ export function inspectWindows(pid, imageName, powershell = 'powershell.exe', si
  * @returns a promise for the same report `inspectWindows` returns.
  */
 export function inspectWindowsAsync(pid, imageName, powershell = 'powershell.exe', since = 0) {
-  const script = inspectWindowsScript(pid, imageName, since);
+  const inspectorArgs = ['--inspect-windows', String(Number(pid) || 0), String(imageName ?? ''), String(Number(since) || 0)];
   return new Promise((resolve) => {
     let child;
     try {
-      child = spawn(powershell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script], { windowsHide: true });
+      child = spawn(NATIVE_INSPECTOR, inspectorArgs, { windowsHide: true });
     } catch (error) {
       resolve({ error: `${error?.message ?? error}` });
       return;
@@ -164,44 +166,6 @@ export function inspectWindowsAsync(pid, imageName, powershell = 'powershell.exe
     child.on('error', (error) => finish({ error: `${error?.message ?? error}` }));
     child.on('close', () => finish(parseWindowReport({ stdout, stderr })));
   });
-}
-
-/** The window-report script, shared by the synchronous and asynchronous inspections. */
-function inspectWindowsScript(pid, imageName, since) {
-  // A multi-line script, not a `; `-joined one-liner: nested blocks joined by semicolons
-  // silently produced an empty report.
-  return `
-$ErrorActionPreference = 'SilentlyContinue'
-$pid0 = ${Number(pid) || 0}
-$name = ${quote(imageName ?? '')}
-$since = ${Number(since) || 0}
-$rows = New-Object System.Collections.ArrayList
-function Add-Row($process, $source) {
-  if ($null -eq $process) { return }
-  [void]$rows.Add([pscustomobject]@{
-    pid = $process.Id; name = $process.ProcessName; title = $process.MainWindowTitle
-    alive = $true; source = $source
-  })
-}
-if ($pid0 -gt 0) { Add-Row (Get-Process -Id $pid0) 'pid' }
-if ($name) { foreach ($p in @(Get-Process | Where-Object { $_.ProcessName -eq $name })) { Add-Row $p 'name' } }
-if ($since -gt 0) {
-  $cutoff = [datetime]::FromFileTime([int64]$since * 10000 + 116444736000000000)
-  foreach ($p in @(Get-Process | Where-Object { $_.MainWindowTitle })) {
-    $started = $null
-    try { $started = $p.StartTime } catch { $started = $null }
-    if ($started -and $started -ge $cutoff) { Add-Row $p 'started' }
-  }
-}
-$unique = @($rows | Sort-Object pid -Unique)
-$alive = @($unique | Where-Object { $_.source -eq 'pid' })
-$windows = @($unique | Where-Object { $_.title })
-[pscustomobject]@{
-  launchedAlive = ($alive.Count -gt 0)
-  windows = @($windows | ForEach-Object { [pscustomobject]@{ pid = $_.pid; name = $_.name; title = $_.title; source = $_.source } })
-  processes = @($unique | ForEach-Object { [pscustomobject]@{ pid = $_.pid; name = $_.name; title = $_.title; source = $_.source } })
-} | ConvertTo-Json -Depth 6 -Compress
-`;
 }
 
 /** Turn one inspection's output into a report, or into a sentence saying why there is none. */

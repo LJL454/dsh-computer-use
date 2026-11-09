@@ -2,8 +2,8 @@
   "schema": 1,
   "name": "@local/dsh-computer-use",
   "version": "1.50.1",
-  "builtAt": "2026-11-09T06:24:32.188Z",
-  "releaseBuildId": "f068b1eea0eef27b",
+  "builtAt": "2026-11-09T18:08:52.679Z",
+  "releaseBuildId": "05dcc1ffa61d7d4d",
   "files": [
     {
       "name": "assets/character/drag-body.png",
@@ -145,9 +145,21 @@
     },
     {
       "name": "backend/bridge.js",
-      "bytes": 49867,
-      "sha256": "f251a8d9646f5f9fd65b05657f31c03f2e8dde82a50dbced4998b508d105d2c1",
-      "sourceSha256": "f251a8d9646f5f9fd65b05657f31c03f2e8dde82a50dbced4998b508d105d2c1"
+      "bytes": 49228,
+      "sha256": "f480e3da0aea1da9c56b0c9917c35bbb958088badaee5b4654a251521c7b14d7",
+      "sourceSha256": "f480e3da0aea1da9c56b0c9917c35bbb958088badaee5b4654a251521c7b14d7"
+    },
+    {
+      "name": "backend/dsh-worker.exe",
+      "bytes": 896000,
+      "sha256": "41e53fcfb0f2521e2f03299cccab83360802675b517eb27a8f0f87e6ff687000",
+      "sourceSha256": "41e53fcfb0f2521e2f03299cccab83360802675b517eb27a8f0f87e6ff687000"
+    },
+    {
+      "name": "backend/dsh-worker.exe.config",
+      "bytes": 138,
+      "sha256": "008d5c22af1b051c44f2fca2c8f0897cd5763ba687a55372cb480d2d7bc72337",
+      "sourceSha256": "008d5c22af1b051c44f2fca2c8f0897cd5763ba687a55372cb480d2d7bc72337"
     },
     {
       "name": "backend/parts/00-preamble.ps1",
@@ -301,9 +313,9 @@
     },
     {
       "name": "index.js",
-      "bytes": 313549,
-      "sha256": "73c6722acbdcf5c77ff19d45d06ba05749d76af08606ad2c733b1ff0b134c53a",
-      "sourceSha256": "73c6722acbdcf5c77ff19d45d06ba05749d76af08606ad2c733b1ff0b134c53a"
+      "bytes": 313574,
+      "sha256": "ca070576f1bca15917e2138bc57e2a52f786df2ec8b57bdce6dcc01c764c87e1",
+      "sourceSha256": "ca070576f1bca15917e2138bc57e2a52f786df2ec8b57bdce6dcc01c764c87e1"
     },
     {
       "name": "install-and-repair.cmd",
@@ -313,9 +325,9 @@
     },
     {
       "name": "INSTALL.md",
-      "bytes": 20840,
-      "sha256": "728a152f7ab1c1913a7c1b630f332b7fb5f209ae475309428831ed0dfd09f810",
-      "sourceSha256": "728a152f7ab1c1913a7c1b630f332b7fb5f209ae475309428831ed0dfd09f810"
+      "bytes": 21329,
+      "sha256": "b3aa7366206321a7668526c280364cb2e5c0178fbe8d4a03bd4052b4b5981663",
+      "sourceSha256": "b3aa7366206321a7668526c280364cb2e5c0178fbe8d4a03bd4052b4b5981663"
     },
     {
       "name": "interaction/indicator-supervisor.mjs",
@@ -349,9 +361,9 @@
     },
     {
       "name": "internal/app-launch.js",
-      "bytes": 17711,
-      "sha256": "bb271068650e9ad7d341128c8e9877aab4bba8c4dd4086dc58a98ef57dd24e48",
-      "sourceSha256": "bb271068650e9ad7d341128c8e9877aab4bba8c4dd4086dc58a98ef57dd24e48"
+      "bytes": 16111,
+      "sha256": "f27189a3ad5861ecf15d22a89b890a8c11d4b411e5887258e672723987d1b228",
+      "sourceSha256": "f27189a3ad5861ecf15d22a89b890a8c11d4b411e5887258e672723987d1b228"
     },
     {
       "name": "internal/app-launch.mjs",
@@ -361,9 +373,9 @@
     },
     {
       "name": "internal/build-check.mjs",
-      "bytes": 5434,
-      "sha256": "ee140b221885c73bc0b448943eeeccfc01dd7b1ccc5c90ea670217f6e0f2d7b1",
-      "sourceSha256": "ee140b221885c73bc0b448943eeeccfc01dd7b1ccc5c90ea670217f6e0f2d7b1"
+      "bytes": 5373,
+      "sha256": "bbb94397855ee51e5c29f916c46e5c60d0203e271bbcdaac06e9a37d762c3611",
+      "sourceSha256": "bbb94397855ee51e5c29f916c46e5c60d0203e271bbcdaac06e9a37d762c3611"
     },
     {
       "name": "internal/call-cadence.mjs",
@@ -397,9 +409,9 @@
     },
     {
       "name": "internal/doctor.mjs",
-      "bytes": 28372,
-      "sha256": "b8032047142e5aa3b37d3fb1cd0ae12e7bffe2e76cf665fbfb43d419c5e77d79",
-      "sourceSha256": "b8032047142e5aa3b37d3fb1cd0ae12e7bffe2e76cf665fbfb43d419c5e77d79"
+      "bytes": 27418,
+      "sha256": "f0e048ae47ace7b9f12ca0c3e5ad4e2273f67fff51c8140bea702d6bb5bc7927",
+      "sourceSha256": "f0e048ae47ace7b9f12ca0c3e5ad4e2273f67fff51c8140bea702d6bb5bc7927"
     },
     {
       "name": "internal/execution.mjs",
@@ -475,9 +487,9 @@
     },
     {
       "name": "internal/release-manifest.mjs",
-      "bytes": 21994,
-      "sha256": "9ca339db81332e3d181aee267d2e1dab44e39c055d9a0ff5169f3ae06c4c1ddc",
-      "sourceSha256": "9ca339db81332e3d181aee267d2e1dab44e39c055d9a0ff5169f3ae06c4c1ddc"
+      "bytes": 21999,
+      "sha256": "d301e5740c8efdc4bcb5b1f3395eec30dd9d161f8b060492e3561eec24934d00",
+      "sourceSha256": "d301e5740c8efdc4bcb5b1f3395eec30dd9d161f8b060492e3561eec24934d00"
     },
     {
       "name": "internal/schema-visibility.mjs",
@@ -547,9 +559,9 @@
     },
     {
       "name": "package.json",
-      "bytes": 3709,
-      "sha256": "22b7c840e5f16f95f1d81193f562ba1e9956e40be028fff4e03cdacbd6c33b6f",
-      "sourceSha256": "22b7c840e5f16f95f1d81193f562ba1e9956e40be028fff4e03cdacbd6c33b6f"
+      "bytes": 3916,
+      "sha256": "2b5683975db3c45312d8a3339959fd870f762b0f215a3139aaf9b6d61b79f711",
+      "sourceSha256": "2b5683975db3c45312d8a3339959fd870f762b0f215a3139aaf9b6d61b79f711"
     },
     {
       "name": "presets/cordis.patch.yml",
@@ -571,9 +583,9 @@
     },
     {
       "name": "README.md",
-      "bytes": 14792,
-      "sha256": "990bff7016b25494ee312c6070af7af1599219ed90ef6f795f93e974a74ff0ac",
-      "sourceSha256": "990bff7016b25494ee312c6070af7af1599219ed90ef6f795f93e974a74ff0ac"
+      "bytes": 15577,
+      "sha256": "4327063a5f8e699a55c75185417e91d96bcd4b47060be074f25a4d7df8632a1e",
+      "sourceSha256": "4327063a5f8e699a55c75185417e91d96bcd4b47060be074f25a4d7df8632a1e"
     },
     {
       "name": "setup.mjs",

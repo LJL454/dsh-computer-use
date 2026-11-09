@@ -6,7 +6,7 @@
  * 又能发现"运行中的 worker 与磁盘上的 worker 不一致"，却证明不了 host / client / internal /
  * patch 来自同一个发行包。1.40.0 把这两件事分开：
  *
- *   * `workerBuildId` —— worker.ps1 的局部协议身份，仍然用于运行中进程的比对；
+ *   * `workerBuildId` —— 当前 dsh-worker.exe 的局部协议身份，用于运行中进程的比对；
  *   * `releaseBuildId` —— 所有生产文件按路径排序后的有序哈希，任何一个文件不同都会变。
  *
  * 发行包在打包时写一份 `release-manifest.json`；宿主启动时重新计算并比对。源码安装没有这份

@@ -1,6 +1,6 @@
 # 人物动作触发问题：按方案落地的改动与验证记录
 
-对象：`dsh-computer-use` 1.50.1（运行目录 `E:\inkos\dsh-plugins\dsh-computer-use`）。
+对象：`dsh-computer-use` 1.50.1（运行目录 `<workspace>\dsh-plugins\dsh-computer-use`）。
 依据：`outputs/action-trigger-review/人物动作触发问题调查与实施方案.txt`（2026-11-08）。
 本文只写"改了什么、怎么验的、还差什么"，不重复方案原文。
 
@@ -125,7 +125,7 @@
 ## 5. 复现命令
 
 ```powershell
-cd E:\inkos\dsh-plugins\dsh-computer-use
+cd <workspace>\dsh-plugins\dsh-computer-use
 
 # 1) 构建（默认 build/ 被运行中的 helper 占用时用 -OutDir）
 powershell -NoProfile -ExecutionPolicy Bypass -File native/indicator-helper/build.ps1 -OutDir build-verify
