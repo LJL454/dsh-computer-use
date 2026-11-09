@@ -2,8 +2,8 @@
   "schema": 1,
   "name": "@local/dsh-computer-use",
   "version": "1.50.1",
-  "builtAt": "2026-11-09T05:56:58.121Z",
-  "releaseBuildId": "bd90e5fd81d8de4b",
+  "builtAt": "2026-11-09T06:24:32.188Z",
+  "releaseBuildId": "f068b1eea0eef27b",
   "files": [
     {
       "name": "assets/character/drag-body.png",
@@ -571,9 +571,9 @@
     },
     {
       "name": "README.md",
-      "bytes": 21437,
-      "sha256": "ccfef23caf4ff62af78c95fdeae7027c436e0b793cb9eaaa0990bc33e72f747c",
-      "sourceSha256": "ccfef23caf4ff62af78c95fdeae7027c436e0b793cb9eaaa0990bc33e72f747c"
+      "bytes": 14792,
+      "sha256": "990bff7016b25494ee312c6070af7af1599219ed90ef6f795f93e974a74ff0ac",
+      "sourceSha256": "990bff7016b25494ee312c6070af7af1599219ed90ef6f795f93e974a74ff0ac"
     },
     {
       "name": "setup.mjs",
