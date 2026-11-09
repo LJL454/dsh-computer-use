@@ -1,0 +1,326 @@
+{
+  "schema": "dsh.character.pack/v3",
+  "assetVersion": "whale-maid-restored-v11-2026-11-07",
+  "alpha": "straight-rgba",
+  "renderMode": "layered",
+  "notes": "User-selected rollback: move is exactly V6, 8 frames / 1000 ms; all six other states remain V10. Later walking drafts are excluded.",
+  "clips": {
+    "idle": {
+      "atlas": "idle-body.png",
+      "frameSize": [
+        384,
+        512
+      ],
+      "grid": [
+        4,
+        2
+      ],
+      "frameCount": 8,
+      "loop": true,
+      "durationsMs": [
+        650,
+        250,
+        100,
+        150,
+        100,
+        350,
+        350,
+        650
+      ],
+      "totalMs": 2600,
+      "anchorPx": [
+        198,
+        459
+      ],
+      "contentBounds": [
+        28,
+        23,
+        340,
+        436
+      ],
+      "bytes": 1176324,
+      "sha256": "861201cccc6d0ea61df09c2e84e997c2bbda2523302710d863cd59311b809497"
+    },
+    "move": {
+      "atlas": "move-body.png",
+      "frameSize": [
+        384,
+        512
+      ],
+      "grid": [
+        4,
+        2
+      ],
+      "frameCount": 8,
+      "loop": true,
+      "durationsMs": [
+        125,
+        125,
+        125,
+        125,
+        125,
+        125,
+        125,
+        125
+      ],
+      "totalMs": 1000,
+      "anchorPx": [
+        198,
+        459
+      ],
+      "contentBounds": [
+        28,
+        23,
+        340,
+        436
+      ],
+      "bytes": 1200715,
+      "sha256": "dfc3ea27de3c93a5476a7d65b1bf8c062a04c71b40c977a2053abb3afb1932ec"
+    },
+    "press_in": {
+      "atlas": "press_in-body.png",
+      "frameSize": [
+        384,
+        512
+      ],
+      "grid": [
+        4,
+        2
+      ],
+      "frameCount": 8,
+      "loop": false,
+      "durationsMs": [
+        70,
+        60,
+        60,
+        60,
+        70,
+        70,
+        80,
+        100
+      ],
+      "totalMs": 570,
+      "anchorPx": [
+        198,
+        459
+      ],
+      "contentBounds": [
+        28,
+        23,
+        340,
+        436
+      ],
+      "bytes": 1275350,
+      "sha256": "3b108d6c8415267561781f5a4d9f6369795bf06ec4ba78e7d6577c06cf8e9ae5"
+    },
+    "pressed_hold": {
+      "atlas": "pressed_hold-body.png",
+      "frameSize": [
+        384,
+        512
+      ],
+      "grid": [
+        1,
+        1
+      ],
+      "frameCount": 1,
+      "loop": true,
+      "durationsMs": [
+        1000
+      ],
+      "totalMs": 1000,
+      "anchorPx": [
+        198,
+        459
+      ],
+      "contentBounds": [
+        28,
+        23,
+        340,
+        436
+      ],
+      "bytes": 166882,
+      "sha256": "b8aa3e55c28ddde21a22fec2aef5c19e3882369723fdfee9149a619aca3c31ac"
+    },
+    "release": {
+      "atlas": "release-body.png",
+      "frameSize": [
+        384,
+        512
+      ],
+      "grid": [
+        4,
+        2
+      ],
+      "frameCount": 8,
+      "loop": false,
+      "durationsMs": [
+        70,
+        70,
+        60,
+        60,
+        70,
+        80,
+        100,
+        140
+      ],
+      "totalMs": 650,
+      "anchorPx": [
+        198,
+        459
+      ],
+      "contentBounds": [
+        28,
+        23,
+        340,
+        436
+      ],
+      "bytes": 1268770,
+      "sha256": "e90ea71615cbdc98906eb56f69ffc7f9b03bfbb799d995a6d86c4be77e4316ad"
+    },
+    "drag": {
+      "atlas": "drag-body.png",
+      "frameSize": [
+        384,
+        512
+      ],
+      "grid": [
+        4,
+        2
+      ],
+      "frameCount": 8,
+      "loop": true,
+      "durationsMs": [
+        160,
+        140,
+        150,
+        160,
+        180,
+        90,
+        160,
+        160
+      ],
+      "totalMs": 1200,
+      "anchorPx": [
+        198,
+        459
+      ],
+      "contentBounds": [
+        28,
+        23,
+        340,
+        436
+      ],
+      "bytes": 1275593,
+      "sha256": "e1e764536d19f9448f385fef27419b9e5adbe719d5806ebd0d72afbeec5a3172"
+    },
+    "eat_loop": {
+      "atlas": "eat_loop-body.png",
+      "frameSize": [
+        384,
+        512
+      ],
+      "grid": [
+        4,
+        4
+      ],
+      "frameCount": 16,
+      "loop": true,
+      "durationsMs": [
+        400,
+        240,
+        120,
+        120,
+        120,
+        120,
+        120,
+        160,
+        300,
+        180,
+        200,
+        200,
+        160,
+        160,
+        200,
+        400
+      ],
+      "totalMs": 3200,
+      "anchorPx": [
+        200,
+        472
+      ],
+      "contentBounds": [
+        58,
+        29,
+        285,
+        443
+      ],
+      "bytes": 3063426,
+      "sha256": "651fb9b8204c93cd45e157bceaebb423caa4a93e263d98bd7fcaf70dde6e544b"
+    }
+  },
+  "parts": [
+    {
+      "name": "tail",
+      "atlas": "tail.png",
+      "perClip": true,
+      "frameSize": [
+        384,
+        512
+      ],
+      "grid": [
+        4,
+        2
+      ],
+      "frameCount": 8,
+      "pivot": [
+        192,
+        484
+      ],
+      "zOrder": -30,
+      "contentBounds": [
+        12,
+        28,
+        360,
+        456
+      ],
+      "motion": {
+        "axis": "y",
+        "amplitude": 0.003,
+        "periodMs": 2800,
+        "phase": 0
+      }
+    },
+    {
+      "name": "hair_back",
+      "atlas": "hair_back.png",
+      "perClip": true,
+      "frameSize": [
+        384,
+        512
+      ],
+      "grid": [
+        4,
+        2
+      ],
+      "frameCount": 8,
+      "pivot": [
+        192,
+        484
+      ],
+      "zOrder": -20,
+      "contentBounds": [
+        12,
+        28,
+        360,
+        456
+      ],
+      "motion": {
+        "axis": "x",
+        "amplitude": 0.0015,
+        "periodMs": 3400,
+        "phase": 0.27
+      }
+    }
+  ]
+}

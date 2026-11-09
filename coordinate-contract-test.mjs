@@ -1,5 +1,5 @@
 /**
- * Deterministic coordinate-contract cases (方案文档 §4 的测试组).
+ * Deterministic coordinate-contract cases (閺傝顢嶉弬鍥ㄣ€?鎼? 閻ㄥ嫭绁寸拠鏇犵矋).
  *
  * The arithmetic is checked against numbers written down here and synthetic frame metadata,
  * not against whatever control happened to be under the cursor: "the projection is right" is
@@ -9,18 +9,15 @@
  *
  * What is covered here, and where the rest lives:
  *
- *   transform          这里：全窗、裁剪、缩放、负原点、附件重缩放、未知变换、越界
- *   window frames      这里（需要一个真实窗口）：尺寸变化拒绝、只移动则重投影
- *   hidden/occluded    遮挡与跨进程落点由 live-tool-test / task-eval 覆盖（需要真实遮挡）
- *   waits              这里：C01（held）、C03（条件组合）、C05（三值）
- *   batches            这里：C02（条件失败即停）、C04（统一 deadline）
- *   captures           这里：A01（同一套 region 语义）、A02（裁剪再缩放）、A07（scale 回执）
- *
+ *   transform          鏉╂瑩鍣烽敍姘弿缁愭ぜ鈧浇顥嗛崜顏傗偓浣虹級閺€淇扁偓浣界閸樼喓鍋ｉ妴渚€妾禒鍫曞櫢缂傗晜鏂侀妴浣规弓閻儱褰夐幑顫偓浣界Ш閻? *   window frames      鏉╂瑩鍣烽敍鍫ユ付鐟曚椒绔存稉顏嗘埂鐎圭偟鐛ラ崣锝忕礆閿涙艾鏄傜€电褰夐崠鏍ㄥ珕缂佹縿鈧礁褰х粔璇插З閸掓瑩鍣搁幎鏇炲
+ *   hidden/occluded    闁喗灏呮稉搴ゆ硶鏉╂稓鈻奸拃鐣屽仯閻?live-tool-test / task-eval 鐟曞棛娲婇敍鍫ユ付鐟曚胶婀＄€圭偤浼勯幐鈽呯礆
+ *   waits              鏉╂瑩鍣烽敍娆?1閿涘潝eld閿涘鈧竼03閿涘牊娼禒鍓佺矋閸氬牞绱氶妴涓?5閿涘牅绗侀崐纭风礆
+ *   batches            鏉╂瑩鍣烽敍娆?2閿涘牊娼禒璺恒亼鐠愩儱宓嗛崑婊愮礆閵嗕竼04閿涘牏绮烘稉鈧?deadline閿? *   captures           鏉╂瑩鍣烽敍娆?1閿涘牆鎮撴稉鈧總?region 鐠囶厺绠熼敍澶堚偓涓?2閿涘牐顥嗛崜顏勫晙缂傗晜鏂侀敍澶堚偓涓?7閿涘澃cale 閸ョ偞澧介敍? *
  * Run with: node coordinate-contract-test.mjs
  */
 import { PowerShellBackend, resolvePowerShell } from './backend/bridge.js';
 import { spawn } from 'node:child_process';
-import { closeSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -172,7 +169,7 @@ try {
   });
   check(
     cropped.ok === true && Math.abs(cropped.x - 500) <= 1 && Math.abs(cropped.y - 400) <= 1,
-    'a cropped and halved frame lands where the arithmetic says (500,400 ±1)',
+    'a cropped and halved frame lands where the arithmetic says (500,400 鍗?)',
     JSON.stringify(cropped),
   );
 
@@ -269,7 +266,7 @@ try {
 
   /* ------------------------------------------------------------- content drift */
 
-  section('content: a surface that changed under the frame (§3.2 的滚动/导航/自刷新)');
+  section('content: a surface that changed under the frame (鎼?.2 閻ㄥ嫭绮撮崝?鐎佃壈鍩?閼奉亜鍩涢弬?');
   const drifted = await run('frameproject', {
     frame: {
       surface: { kind: 'screenRegion', x: 0, y: 0, width: 64, height: 48 },
@@ -296,7 +293,7 @@ try {
     x: 10,
     y: 10,
   });
-  check(stillFresh.ok === true, 'a fresh frame is not checked at all — the caller has just looked', JSON.stringify(stillFresh));
+  check(stillFresh.ok === true, 'a fresh frame is not checked at all 閳?the caller has just looked', JSON.stringify(stillFresh));
 
   const optedOut = await run('frameproject', {
     frame: {
@@ -366,7 +363,7 @@ try {
       String(moved.guard),
     );
 
-    // The doc's worked example (§2.4) moves the window by (30, 20) — both axes. A frame records
+    // The doc's worked example (鎼?.4) moves the window by (30, 20) 閳?both axes. A frame records
     // where the window was *then* (surface and windowRect agree, as they do in a real frame), and
     // the projection has to land on where the window is now, on both axes, not just the one the
     // drift number names.
@@ -387,7 +384,7 @@ try {
       JSON.stringify({ x: twoAxis.x, y: twoAxis.y, drift: twoAxis.drift, expected: { x: target.x + 10, y: target.y + 10 } }),
     );
 
-    // §4's "same process, another window" and "a legitimate dialog transition" rows: both are
+    // 鎼?'s "same process, another window" and "a legitimate dialog transition" rows: both are
     // decided by the guard's owner/pid logic, and both need a second window of the same process on
     // top of the target. When this desktop has one, the case runs; when it does not, it says so.
     const sibling = (windows.windows ?? []).find((one) => Number(one.pid) === Number(target.pid)
@@ -418,7 +415,7 @@ try {
         const allowed = await run('frameproject', { frame: frameSpec, x: siblingX - target.x, y: siblingY - target.y, allowWindows: [sibling.hwnd] });
         check(
           allowed.ok === true && String(allowed.guard) === 'allowed-transition',
-          'the same point is allowed once that window is named as an expected transition (§3.3 第 3 条)',
+          'the same point is allowed once that window is named as an expected transition (鎼?.3 缁?3 閺?',
           JSON.stringify({ ok: allowed.ok, guard: allowed.guard, recovered: allowed.recovered }).slice(0, 130),
         );
       } finally {
@@ -581,7 +578,9 @@ try {
       timeout_ms: 260,
     }, { timeoutMs: 20_000 });
     check(
-      tooShort.satisfied === false && tooShort.outcome === 'timeout' && tooShort.timeoutKind === 'not-held' && Number(tooShort.heldMs) > 0,
+      // heldMs 是采样诊断：机器被占满时可能只取到一个样本而记 0。契约是
+      // "没稳定够 500 ms 就绝不能报 satisfied"，heldMs 只作为明细带出去。
+      tooShort.satisfied === false && tooShort.outcome === 'timeout' && tooShort.timeoutKind === 'not-held',
       'stable_ms that never completed is NOT reported satisfied (C01)',
       JSON.stringify({ outcome: tooShort.outcome, kind: tooShort.timeoutKind, heldMs: tooShort.heldMs, waitedMs: tooShort.waitedMs, budget: tooShort.timeoutMs }),
     );
@@ -664,7 +663,7 @@ try {
   }, { timeoutMs: 20_000 });
   check(
     anyUnknown.satisfied === false && String(anyUnknown.status).toLowerCase() === 'unknown',
-    'an `any` group with no true leg is unknown when a leg cannot be observed — not false',
+    'an `any` group with no true leg is unknown when a leg cannot be observed 閳?not false',
     JSON.stringify({ status: anyUnknown.status, outcome: anyUnknown.outcome, observed: String(anyUnknown.observed ?? '').slice(0, 90) }),
   );
 
@@ -726,7 +725,7 @@ try {
     stopOnWindowChange: false,
     deadlineMs: 500,
   }, { timeoutMs: 30_000 });
-  // The contract this pair of waits now has to satisfy (9.txt §5.7): the first wait is cut
+  // The contract this pair of waits now has to satisfy (9.txt 鎼?.7): the first wait is cut
   // short by the call's deadline and *says so*, and the step after it does not start at all --
   // "stop starting new steps on a spent budget" is the fix; the old version let the second
   // wait begin as a no-op and reported `deadline-partial` as if the call had merely been
@@ -735,7 +734,7 @@ try {
     partial.outcome === 'deadline' && partial.failedAt === 1 && partial.outOfBudget === true
       && String(partial.performed[0] ?? '').includes('of the 0.6s asked for')
       && partial.performed.length === 1,
-    'one deadline covers the whole call, a wait it cut short says so, and the step after it never starts (C04 + §5.7)',
+    'one deadline covers the whole call, a wait it cut short says so, and the step after it never starts (C04 + 鎼?.7)',
     JSON.stringify({ outcome: partial.outcome, failedAt: partial.failedAt, outOfBudget: partial.outOfBudget, performed: partial.performed }),
   );
 
@@ -832,7 +831,7 @@ try {
 
   check(
     Number.isFinite(Number(regionShot.captureSpanMs)) && Number(regionShot.captureSpanMs) >= 0,
-    'the capture reports its own span as one duration that means the same on both sides of the pipe (§9.1)',
+    'the capture reports its own span as one duration that means the same on both sides of the pipe (鎼?.1)',
     String(regionShot.captureSpanMs),
   );
 
@@ -907,7 +906,7 @@ try {
 
   /* ------------------------------------------------ region conditions (visual) */
 
-  section('region conditions: a completion signal that reads pixels (§6.2 自绘界面)');
+  section('region conditions: a completion signal that reads pixels (鎼?.2 閼奉亞绮悾宀勬桨)');
   // A rectangle that is actually static: the top-left corner of the desktop changes (a clock, a
   // cursor, a widget), which is a fact about that corner rather than about the condition. The
   // area used is inside a window, where the pixels hold still.
@@ -954,12 +953,12 @@ try {
   }, { timeoutMs: 20_000 });
   check(
     regionChanged.satisfied === false,
-    'mode changed stays false on a rectangle that is not changing — the baseline is the first sample, not "anything differs from nothing"',
+    'mode changed stays false on a rectangle that is not changing 閳?the baseline is the first sample, not "anything differs from nothing"',
     JSON.stringify({ satisfied: regionChanged.satisfied, status: regionChanged.status }).slice(0, 100),
   );
   check(
     Number(regionStable.pollMs) >= 250 && Number(regionStable.pollBackoffTo ?? 0) >= 800,
-    'a visual condition is polled more slowly than a cheap one, and backs off further (§6.2)',
+    'a visual condition is polled more slowly than a cheap one, and backs off further (鎼?.2)',
     `pollMs=${regionStable.pollMs} backoff=${regionStable.pollBackoffTo}`,
   );
 
@@ -994,7 +993,7 @@ try {
   );
   // The spec key earns its keep *inside* one batch: a step that captured at half scale is not the
   // same picture as the full-scale answer the call is about, so it may not stand in for it
-  // (A06: "请求窗口、区域或输出规格与缓存不同 → 不能当成同一截图直接复用").
+  // (A06: "鐠囬攱鐪扮粣妤€褰涢妴浣稿隘閸╃喐鍨ㄦ潏鎾冲毉鐟欏嫭鐗告稉搴ｇ处鐎涙ü绗夐崥?閳?娑撳秷鍏樿ぐ鎾村灇閸氬奔绔撮幋顏勬禈閻╁瓨甯存径宥囨暏").
   const specScale = await run('batch', {
     steps: [{ action: 'screenshot', scale: 0.5, path: join(root, 'spec-half.png') }],
     region: specA,
@@ -1009,30 +1008,80 @@ try {
     JSON.stringify({ captureUsed: specScale.captureUsed, w: specScale.shot?.width }).slice(0, 150),
   );
 
+  /**
+   * 杩欎釜鐢ㄤ緥闇€瑕?*鏈夌‘瀹氳竟妗?*鐨勭獥鍙ｏ紙澶嶆牳缁撹绗?2 鏉★級銆?   *
+   * 浠ュ墠瀹冩姄鐨勬槸妗岄潰涓婇殢渚夸竴涓彲瑙佺獥鍙ｏ紱鍦ㄦ湰鏈轰笂閭ｆ槸鏃犺竟妗嗙殑 Chromium锛坈lient 涓?whole 瀹屽叏鐩哥瓑锛夛紝
+   * 浜庢槸鏂█ client < whole 蹇呯劧澶辫触銆傚垽鏂?瑁佸壀瀵逛笉瀵?涓嶈兘渚濊禆鍒汉鐨勭獥鍙ｉ暱浠€涔堟牱锛屾墍浠ヨ繖閲岃嚜宸遍€犱竴涓?   * 鏍囧噯杈规绐楀彛锛氭湁鏍囬鏍忋€佹湁 1px 杈规锛宑lient 涓€瀹氫弗鏍煎皬浜?whole銆?   */
+  async function startBorderedFixture(dir) {
+    const script = join(dir, 'bordered-fixture.ps1');
+    writeFileSync(script, [
+      'Add-Type -AssemblyName System.Windows.Forms',
+      'Add-Type -AssemblyName System.Drawing',
+      '$form = New-Object System.Windows.Forms.Form',
+      "$form.Text = 'dsh-bordered-fixture'",
+      "$form.FormBorderStyle = 'FixedSingle'",
+      "$form.StartPosition = 'Manual'",
+      '$form.Location = New-Object System.Drawing.Point(160, 160)',
+      '$form.Size = New-Object System.Drawing.Size(560, 420)',
+      "$form.BackColor = [System.Drawing.Color]::FromArgb(24, 32, 44)",
+      '$form.Show()',
+      '[System.Windows.Forms.Application]::Run($form)',
+      '',
+    ].join('\r\n'), 'utf8');
+    // detached + 文件句柄 stdio 在本机沙箱里会静默失败（进程根本没起来）；
+    // 不 detached、stdio:'ignore' 才稳定出窗。子进程留着引用，结束时杀掉。
+    const child = spawn(resolvePowerShell(), ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script], { stdio: 'ignore' });
+    child.on('error', () => { /* reported as "did not appear" below */ });
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const list = await backend.request('windows', {}, { timeoutMs: 20_000 }).catch(() => ({ windows: [] }));
+      const found = (list.windows ?? []).find((one) => String(one.title) === 'dsh-bordered-fixture');
+      if (found !== undefined) return { pid: child.pid, child, window: found };
+    }
+    try { child.kill(); } catch { /* gone */ }
+    return null;
+  }
+
   /* ------------------------------------------------------------ client area */
 
-  section('capture surface: the whole window, or the client area only (§2.2)');
+  section('capture surface: the whole window, or the client area only (鎼?.2)');
   if (target === undefined) {
     skip('client-area capture', 'no visible window to capture');
   } else {
     try {
-      const whole = await run('screenshot', { window: target.hwnd, path: join(root, 'whole.png'), format: 'png', require: 'window' }, { timeoutMs: 40_000 });
+      // 复核结论第 2 条：裁剪对不对不能依赖桌面上随便一个窗口的形态。这里自己造一个
+      // 标准边框窗口（有标题栏 + 1px 边框），client 必须**严格**小于 whole；
+      // 夹具起不来时才退回桌面窗口，那时只断言 <=，并把 framed=false 写进证据。
+      const fixture = await startBorderedFixture(root);
+      const probe = fixture?.window ?? target;
+      const framed = fixture !== null;
+      const whole = await run('screenshot', { window: probe.hwnd, path: join(root, 'whole.png'), format: 'png', require: 'window' }, { timeoutMs: 40_000 });
       check(
         Number.isFinite(Number(whole.windowRect?.width)) && Number(whole.windowRect.width) >= Number(whole.width),
-        'the capture reports the whole window rectangle, apart from the frame it delivered (§9.1)',
+        'the capture reports the whole window rectangle, apart from the frame it delivered (鎼?.1)',
         JSON.stringify(whole.windowRect),
       );
-      const client = await run('screenshot', { window: target.hwnd, surface: 'client', path: join(root, 'client.png'), format: 'png', require: 'window' }, { timeoutMs: 40_000 });
+      const client = await run('screenshot', { window: probe.hwnd, surface: 'client', path: join(root, 'client.png'), format: 'png', require: 'window' }, { timeoutMs: 40_000 });
       check(
         String(client.surfaceKind ?? '') === 'clientArea',
         'surface: client is recorded as its own capture surface',
         JSON.stringify({ surfaceKind: client.surfaceKind, surface: client.surface }).slice(0, 120),
       );
+      // 证据留档：hwnd、标题、样式、DPI、状态、两种矩形与截图路径（复核要求可复核）。
+      writeFileSync(join(root, 'client-area-evidence.json'), JSON.stringify({
+        framed, hwnd: probe.hwnd, title: probe.title, style: probe.style, dpi: probe.dpi, state: probe.state,
+        whole: { width: whole.width, height: whole.height },
+        client: { width: client.width, height: client.height },
+        wholePng: join(root, 'whole.png'), clientPng: join(root, 'client.png'),
+      }, null, 2), 'utf8');
+      const insideBounds = Number(client.width) <= Number(whole.width) && Number(client.height) <= Number(whole.height);
+      const strictlySmaller = Number(client.width) < Number(whole.width) || Number(client.height) < Number(whole.height);
       check(
-        Number(client.width) <= Number(whole.width) && Number(client.height) <= Number(whole.height)
-          && (Number(client.width) < Number(whole.width) || Number(client.height) < Number(whole.height)),
-        'the client capture delivers no more than the whole window — a window that draws its own title bar is cropped by its border, one that does not by its frame',
-        `whole=${whole.width}x${whole.height} client=${client.width}x${client.height}`,
+        framed ? insideBounds && strictlySmaller : insideBounds,
+        framed
+          ? 'the client capture delivers strictly less than the whole window -- a real title bar is cropped by its border'
+          : 'the client capture delivers no more than the whole window (no bordered fixture: the desktop window is frameless)',
+        `framed=${framed} whole=${whole.width}x${whole.height} client=${client.width}x${client.height}`,
       );
       check(
         Number(client.crop?.width ?? client.width) <= Number(client.surface?.width ?? client.width),
@@ -1040,11 +1089,16 @@ try {
         JSON.stringify({ crop: client.crop, surface: client.surface }).slice(0, 130),
       );
 
+      // 夹具用完立刻关掉：它是一扇真的顶层窗口，留在那里会盖住后面"按图像像素移动指针"那组用例。
+      if (fixture !== null) { try { fixture.child.kill(); } catch { /* gone */ } }
+
       // A move aimed with image pixels is a coordinate write like any other, and this is the one
       // that used to be neither projected nor guarded: the step took the image point as a desktop
       // point and moved the pointer somewhere else entirely, with no error to show for it. The
       // cursor is the evidence, so the case reads it back.
-      const frameId = String(whole.frame ?? '');
+      // 这一组要的是**目标窗口**的帧，不是刚才那扇夹具窗口的帧（夹具已经关掉了）。
+      const targetWhole = await run('screenshot', { window: target.hwnd, path: join(root, 'whole-target.png'), format: 'png', require: 'window' }, { timeoutMs: 40_000 }).catch(() => null);
+      const frameId = String(targetWhole?.frame ?? '');
       if (frameId === '') {
         skip('the move step aimed by a frame', 'the capture did not answer with a frame id');
       } else {
@@ -1065,15 +1119,15 @@ try {
           skip('the move step aimed by a frame', `the point is not legal on this desktop right now (${String(moved.error).slice(0, 80)})`);
         } else {
           // A pointer arrives by way of the absolute normalised coordinate space, so the
-          // round trip is allowed the ±1 physical pixel the plan names as the tolerance
-          // (§4: "往返映射误差不超过约定的 1 个物理像素"). What must NOT happen is the
+          // round trip is allowed the 鍗? physical pixel the plan names as the tolerance
+          // (鎼?: "瀵扳偓鏉╂梹妲х亸鍕嚖瀹割喕绗夌搾鍛扮箖缁撅箑鐣鹃惃?1 娑擃亞澧块悶鍡楀剼缁?). What must NOT happen is the
           // image pixel being used as a desktop pixel: that lands the pointer at (8,8),
           // which is nowhere near the window for any window this case can pick.
           const dx = Math.abs(Number(after.x) - wantX);
           const dy = Math.abs(Number(after.y) - wantY);
           check(
             moved.failedAt === -1 && dx <= 1 && dy <= 1,
-            'a move step reads x/y as pixels of the frame and moves the pointer to the projected place (±1 px, the documented round-trip tolerance)',
+            'a move step reads x/y as pixels of the frame and moves the pointer to the projected place (鍗? px, the documented round-trip tolerance)',
             JSON.stringify({ failedAt: moved.failedAt, landed: `${Number(after.x)},${Number(after.y)}`, want: `${wantX},${wantY}`, delta: `${dx},${dy}`, error: String(moved.error ?? '').slice(0, 80) }),
           );
           check(
@@ -1093,6 +1147,21 @@ try {
   console.log(`\n  ERROR  ${error instanceof Error ? error.stack ?? error.message : String(error)}`);
 } finally {
   backend.dispose();
+  try {
+    // 复核要求"留存 hwnd/样式/DPI/状态/矩形/截图"：临时目录会删掉，所以复制一份到 dist/。
+    const evidenceDir = join(process.cwd(), 'dist');
+    const evidence = join(root, 'client-area-evidence.json');
+    if (existsSync(evidence)) {
+      mkdirSync(evidenceDir, { recursive: true });
+      copyFileSync(evidence, join(evidenceDir, 'coordinate-client-area-evidence.json'));
+      for (const png of ['whole.png', 'client.png']) {
+        const from = join(root, png);
+        if (existsSync(from)) copyFileSync(from, join(evidenceDir, 'coordinate-' + png));
+      }
+    }
+  } catch {
+    /* evidence is best effort, the assertions above already ran */
+  }
   try {
     rmSync(root, { recursive: true, force: true });
   } catch {

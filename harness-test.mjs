@@ -177,19 +177,23 @@ async function main() {
   check("injects only 'tools' (webServer is optional)", Array.isArray(plugin.inject) && plugin.inject.length === 1 && plugin.inject[0] === 'tools', JSON.stringify(plugin.inject));
 
   const harness = createContext({ withAttachments: true });
-  plugin.apply(harness.ctx, { defaultEnabled: false });
+  plugin.apply(harness.ctx, { defaultEnabled: false, visualPreferencesPath: join(shimDir, 'preferences.json') });
 
   console.log('\n== registration ==');
   check(`registered ${EXPECTED_TOTAL} tools`, harness.tools.size === EXPECTED_TOTAL, `got ${harness.tools.size}: ${[...harness.tools.keys()].join(', ')}`);
   for (const name of EXPECTED_TOOLS) check(`tool ${name}`, harness.tools.has(name));
-  check('registered 4 routes', harness.routes.size === 4, [...harness.routes.keys()].join(', '));
+  check('registered 8 routes', harness.routes.size === 8, [...harness.routes.keys()].join(', '));
+  check('action table route path', harness.routes.has('/computer-use/action-table'));
+  check('visual preview route path', harness.routes.has('/computer-use/visual-preview'));
+  check('visual preferences route path', harness.routes.has('/computer-use/visual-preferences'));
+  check('modules route path', harness.routes.has('/computer-use/modules'));
   check('status route path', harness.routes.has('/computer-use/status'));
   check('state route path', harness.routes.has('/computer-use/state'));
   check('probe route path', harness.routes.has('/computer-use/probe'));
   // 1.39.2：多出来的那条是 /computer-use/doctor —— 只读自检，用来把"芯片亮着、工具调不动"
   // 这一类没有症状的故障变成一份能直接读的清单（见 internal/doctor.mjs）。
   check('doctor route path', harness.routes.has('/computer-use/doctor'));
-  check('registered 6 effects (4 routes + ownership + backend lifetime)', harness.effects.length === 6, harness.effects.map((e) => e.label).join(' | '));
+  check('registered 11 effects (8 routes + ownership + release check + backend lifetime)', harness.effects.length === 11, harness.effects.map((e) => e.label).join(' | '));
 
   console.log('\n== tool schemas ==');
   for (const name of EXPECTED_TOOLS) {
@@ -238,7 +242,7 @@ async function main() {
   check('the refusal tells the child to hand the step back', subagentMessage.includes('交回主代理'));
 
   const defaultHarness = createContext({ withAttachments: true });
-  plugin.apply(defaultHarness.ctx, { defaultEnabled: true });
+  plugin.apply(defaultHarness.ctx, { defaultEnabled: true, visualPreferencesPath: join(shimDir, 'preferences.json') });
   let leakMessage = '';
   try {
     await defaultHarness.tools.get('computer_windows').execute({}, SUBAGENT_EXEC);
@@ -504,7 +508,7 @@ async function main() {
 
   console.log('\n== attachment store absent ==');
   const bare = createContext({ withAttachments: false });
-  plugin.apply(bare.ctx, { defaultEnabled: true });
+  plugin.apply(bare.ctx, { defaultEnabled: true, visualPreferencesPath: join(shimDir, 'preferences.json') });
   const bareShot = await bare.tools.get('computer_screenshot').execute({}, { agent: { session: { id: 'no-attachments' } } });
   const bareBlocks = bare.tools.get('computer_screenshot').output.render({}, bareShot);
   check('falls back to a readable path', bareShot.image === undefined && typeof bareShot.note === 'string' && bareShot.note.includes('read_image'), JSON.stringify(bareShot.note).slice(0, 120));
@@ -513,17 +517,17 @@ async function main() {
 
   console.log('\n== no web server (headless profile) ==');
   const headless = createContext({ withAttachments: false, withWebServer: false });
-  plugin.apply(headless.ctx, { defaultEnabled: false });
+  plugin.apply(headless.ctx, { defaultEnabled: false, visualPreferencesPath: join(shimDir, 'preferences.json') });
   check('tools still register without a web server', headless.tools.size === EXPECTED_TOTAL, `${headless.tools.size} tools`);
   check('no chip routes register without a web server', headless.routes.size === 0, [...headless.routes.keys()].join(', '));
-  check('the ownership and backend lifetime effects still register', headless.effects.length === 2, headless.effects.map((e) => e.label).join(' | '));
+  check('ownership, background verification and backend lifetime still register', headless.effects.length === 3, headless.effects.map((e) => e.label).join(' | '));
   check('a never-granted Session is still refused', await headless.tools.get('computer_windows').execute({}, { agent: { session: { id: 'never-granted' } } })
     .then(() => false, (error) => error.message.includes('电脑操作尚未在本会话开启')));
 
   // Without a chip there is no way to grant per Session, so defaultEnabled is the
   // only switch a headless deployment has. Keep that path working.
   const headlessOpen = createContext({ withAttachments: false, withWebServer: false });
-  plugin.apply(headlessOpen.ctx, { defaultEnabled: true });
+  plugin.apply(headlessOpen.ctx, { defaultEnabled: true, visualPreferencesPath: join(shimDir, 'preferences.json') });
   const headlessShot = await headlessOpen.tools.get('computer_screenshot').execute({}, { agent: { session: { id: 'headless-open' } } });
   const headlessBlocks = headlessOpen.tools.get('computer_screenshot').output.render({}, headlessShot);
   check('defaultEnabled grants every Session when there is no chip', typeof headlessShot.path === 'string' && headlessBlocks[0].text.includes('<screen_capture>'));

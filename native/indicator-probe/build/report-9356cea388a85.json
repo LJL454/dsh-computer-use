@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "backend": "layered",
+  "excludeFromCapture": false,
+  "windowsBuild": "10.0.26200",
+  "dpiAware": true,
+  "monitors": 1,
+  "hookInstalled": true,
+  "hookReady": 1,
+  "hookFailed": 0,
+  "escCount": 0,
+  "escIgnoredInjected": 0,
+  "frames": 31,
+  "firstPresentMs": 41884739,
+  "foregroundBefore": 527064,
+  "foregroundAfter": 527064,
+  "focusUnchanged": true,
+  "selfTest": { "injectedIgnored": 1, "latchAfterInjected": false, "realCounted": 1 },
+  "hitTestOverlayHits": 0,
+  "hitTests": [ { "x": 1280, "y": 720, "hit": 461006, "isOverlay": false }, { "x": 1280, "y": 24, "hit": 66076, "isOverlay": false }, { "x": 8, "y": 720, "hit": 66076, "isOverlay": false }, { "x": 2552, "y": 720, "hit": 66076, "isOverlay": false }, { "x": 1280, "y": 1432, "hit": 66048, "isOverlay": false } ],
+  "error": "",
+  "windows": [
+    { "device": "\\\\.\\DISPLAY1", "x": 0, "y": 0, "width": 2560, "height": 1440, "dpi": 96, "primary": true, "hwnd": 7995848, "affinityOk": false, "affinityError": 0 }
+  ]
+}

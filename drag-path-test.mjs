@@ -73,6 +73,18 @@ const cmdFile = join(workDir, 'cmd.txt');
 const stopFile = join(workDir, 'stop');
 writeFileSync(probeScript, [
   'param([string]$Dir)',
+  // 这个夹具必须**先**声明 DPI 感知，再创建窗口。否则 PowerShell 进程是 DPI 不感知的，
+  // Windows 会把它的坐标按缩放比虚拟化：在 150% 的桌面上，一次真实的 (200,180) 按下会被
+  // WPF 报成 (133,120) —— 正好 2/3。那不是工具dot错了，是夹具拿到的坐标被系统改写了。
+  // 声明 per-monitor-v2（-4）之后，夹具与工具说的是同一套物理像素。
+  'Add-Type -TypeDefinition @"',
+  'using System;',
+  'using System.Runtime.InteropServices;',
+  'public static class DpiAwareness {',
+  '  [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr value);',
+  '}',
+  '"@',
+  'try { [void][DpiAwareness]::SetProcessDpiAwarenessContext([IntPtr](-4)) } catch { }',
   'Add-Type -AssemblyName PresentationFramework',
   'Add-Type -AssemblyName PresentationCore',
   'Add-Type -AssemblyName WindowsBase',
@@ -117,6 +129,10 @@ writeFileSync(probeScript, [
   '    Remove-Item -LiteralPath (Join-Path $Dir "ask") -Force -ErrorAction SilentlyContinue',
   '    $lines = @()',
   '    $lines += "hwnd=" + (New-Object System.Windows.Interop.WindowInteropHelper($window)).Handle',
+  // 实时原点：`ready.txt` 里那一份是 Show() 之后立刻取的，窗口还没被 WM 放稳，可能是旧位置。
+  // 每次问状态都重新算一次，测试才会用"此刻"的原点去换算坐标。
+  '    $live = $canvas.PointToScreen((New-Object System.Windows.Point(0,0)))',
+  '    $lines += "origin=" + [int]$live.X + "," + [int]$live.Y',
   '    $lines += "down=" + $script:down',
   '    $lines += "up=" + $script:up',
   '    $lines += "moves=" + $script:moves.Count',
@@ -223,6 +239,21 @@ try {
   tellFixture('focus');
   await sleep(400);
 
+  /**
+   * 当前画布原点（实时读回）。
+   *
+   * `ready.txt` 里那份是 Show() 之后立刻算的，窗口还没被系统放稳 —— 用它换算会得到一个已经过期的
+   * 偏移，于是工具按错的屏幕坐标去按，夹具也就记录在错的地方。每次动作前重新问一次。
+   */
+  const refreshOrigin = () => {
+    const state = askFixture();
+    if (typeof state.origin === 'string') {
+      const [x, y] = state.origin.split(',').map((one) => Number(one));
+      if (Number.isFinite(x) && Number.isFinite(y)) origin = { x, y };
+    }
+    return state;
+  };
+
   /** A canvas point (in window/canvas coordinates) as an absolute desktop point. */
   const at = (x, y) => ({ x: origin.x + x, y: origin.y + y });
 
@@ -230,6 +261,7 @@ try {
   console.log('== a path drag follows the path, not the chord ==');
   tellFixture('reset');
   await sleep(150);
+  refreshOrigin();
   const start = at(40, 40);
   const bend = at(200, 40);
   const finish = at(200, 180);

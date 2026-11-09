@@ -181,8 +181,15 @@ try {
     } else {
       check('the file input takes the file and says which', uploaded.outcome === 'completed' && uploaded.verification[0]?.status === 'ok', JSON.stringify({ outcome: uploaded.outcome, verification: uploaded.verification[0] }));
       check('and the receipt names the file that landed', /待上传\.txt/.test(uploaded.verification[0]?.note ?? ''), String(uploaded.verification[0]?.note));
-      const noFiles = await call('browser_actions', { tab, steps: [{ action: 'upload', ref: uploaded.performed.length > 0 ? fileCandidates.find((node) => true).ref : fileCandidates[0].ref }] });
-      check('an upload without files is refused', noFiles.failedAt === 0 && /at least one file/i.test(noFiles.error ?? ''), String(noFiles.error));
+      // 输入契约（方案 4.2 / PR02）：缺 files 的 upload 在派发之前以 BAD_REQUEST 失败，
+      // 而不是"跑一步再给 mismatch 回执"——后者意味着连接已经建立，只是没写文件。
+      let refusedUpload = null;
+      try {
+        await call('browser_actions', { tab, steps: [{ action: 'upload', ref: fileCandidates[0].ref }] });
+      } catch (error) {
+        refusedUpload = error;
+      }
+      check('an upload without files is refused before dispatch', refusedUpload?.code === 'BAD_REQUEST' && /files/.test(refusedUpload?.message ?? ''), String(refusedUpload?.message ?? refusedUpload));
     }
     const stateStep = await call('browser_actions', { tab, steps: [{ action: 'state', filter: '保存' }] });
     check('a state step answers with the tree it read', Array.isArray(stateStep.nodes) && stateStep.nodes.length > 0, JSON.stringify({ nodes: stateStep.nodes?.length, collected: stateStep.collected }));

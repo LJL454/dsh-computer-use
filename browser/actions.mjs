@@ -19,19 +19,14 @@
  */
 
 import { CdpError } from './connection.mjs';
+import { ACTION_BUDGET, clampActionBudget, BROWSER_ACTIONS } from './contracts.mjs';
+export { ACTION_BUDGET, clampActionBudget, BROWSER_ACTIONS } from './contracts.mjs';
 
 /** The call-level budget (§12): 15 s by default, 60 s at most. */
-export const ACTION_BUDGET = Object.freeze({ defaultMs: 15000, maxMs: 60000 });
 
 /** Clamp a requested call budget into its range. */
-export function clampActionBudget(value) {
-  const requested = Number(value);
-  if (!Number.isFinite(requested) || requested <= 0) return ACTION_BUDGET.defaultMs;
-  return Math.min(ACTION_BUDGET.maxMs, Math.max(1000, Math.round(requested)));
-}
 
 /** The steps this layer understands today. */
-export const BROWSER_ACTIONS = Object.freeze(['navigate', 'click', 'fill', 'type', 'upload', 'scroll', 'hover', 'press', 'select', 'tabs', 'wait_for', 'state']);
 
 /**
  * Register the wait for one navigation, *before* the navigation is sent (§5.11).
@@ -175,6 +170,51 @@ async function axValueOf(session, sessionId, backendNodeId, options) {
 }
 
 /**
+ * The control's *own* value, read back from the DOM (`方案 4.3 / PR03`).
+ *
+ * The accessibility tree is a second, differently-updated view of the same control: it can lag a
+ * `change` handler, and for a `<select>` it sometimes reports the label where the DOM holds the
+ * code. Comparing a DOM write against an AX read mixes two sources of truth, so verification
+ * reads the DOM and the AX value is only ever carried along as auxiliary evidence.
+ *
+ * @returns `{ ok: true, value }` or `{ ok: false, reason }`.
+ */
+async function domValueOf(session, sessionId, backendNodeId, options) {
+  try {
+    const value = await callOnNode(session, sessionId, backendNodeId, 'function () { return typeof this.value === "string" ? this.value : String(this.value ?? ""); }', [], options);
+    return { ok: true, value: String(value ?? '') };
+  } catch (failure) {
+    return { ok: false, reason: failure instanceof Error ? failure.message : String(failure) };
+  }
+}
+
+/**
+ * Re-read the control until the value settles, inside what is left of the call's budget.
+ *
+ * A `change` handler that puts the old value back runs on the same task as the dispatch, but a
+ * framework that re-renders may put it back a tick later. One read taken immediately would call
+ * that a success; the short poll is what makes "the page reverted it" observable without making
+ * every select pay a fixed sleep.
+ *
+ * @returns `{ ok: true, value, settled }` or `{ ok: false, reason }`.
+ */
+async function settledDomValueOf(session, sessionId, backendNodeId, options) {
+  let last = await domValueOf(session, sessionId, backendNodeId, options);
+  if (!last.ok) return last;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const budget = Number(options().timeoutMs);
+    if (!Number.isFinite(budget) || budget < 60) break;
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    const again = await domValueOf(session, sessionId, backendNodeId, options);
+    if (!again.ok) return again;
+    const settled = again.value === last.value;
+    last = again;
+    if (settled) return { ok: true, value: last.value, settled: true };
+  }
+  return { ok: true, value: last.value, settled: false };
+}
+
+/**
  * Run a sequence of browser actions in one call.
  *
  * @param session - the BrowserSession holding the references.
@@ -188,6 +228,21 @@ export async function runActions(session, args) {
   const steps = Array.isArray(args.steps) ? args.steps : [];
   const performed = [];
   const verification = [];
+  /**
+   * 验证阶段花了多少毫秒（方案 4.9 的 `verifyMs`）。
+   *
+   * 只累计**验证性读取**：`:hover`、DOM 最终值、wait_for 的条件轮询。派发本身不算 ——
+   * "点完又读了 12 ms 才敢说成功"与"点击本身 12 ms"是两件事，混在一起就没人能定位慢在哪。
+   */
+  let verifyMs = 0;
+  const measuredVerify = async (fn) => {
+    const beganAt = performance.now();
+    try {
+      return await fn();
+    } finally {
+      verifyMs += performance.now() - beganAt;
+    }
+  };
   let failedAt = -1;
   let actionSent = false;
   let outcome = 'completed';
@@ -197,6 +252,7 @@ export async function runActions(session, args) {
   const baseReceipt = () => ({
     performed: [...performed],
     verification: [...verification],
+    verifyMs: Math.round(verifyMs),
     failedAt,
     actionSent,
     outcome,
@@ -363,7 +419,7 @@ export async function runActions(session, args) {
               lastNote = `location.href is ${href}`;
               if (href.includes(wantedUrl)) { satisfied = true; break; }
             } else {
-              const read = await session.readAx({ targetId: boundTarget, filter: wanted, maxNodes: 5, timeoutMs: Math.max(250, deadline - Date.now()), signal: args.signal });
+              const read = await measuredVerify(() => session.readAx({ targetId: boundTarget, filter: wanted, maxNodes: 5, timeoutMs: Math.max(250, deadline - Date.now()), signal: args.signal }));
               lastNote = read.nodes.length > 0 ? `${read.nodes.length} node(s) match ${JSON.stringify(wanted)}` : `nothing in the tree matches ${JSON.stringify(wanted)} yet`;
               if (read.nodes.length > 0) { satisfied = true; break; }
             }
@@ -415,7 +471,7 @@ export async function runActions(session, args) {
           await session.connection.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: box.x, y: box.y, button: 'none' }, { sessionId, ...options() });
           // A hover is verifiable after all: the page itself knows whether the pointer is over
           // the element. "Moved the mouse" is not evidence; `:hover` is.
-          const hovered = await callOnNode(session, sessionId, identity.backendNodeId, 'function () { return this.matches(":hover") === true; }', [], options());
+          const hovered = await measuredVerify(() => callOnNode(session, sessionId, identity.backendNodeId, 'function () { return this.matches(":hover") === true; }', [], options()));
           performed.push(`hover ${identity.role} "${identity.name}"`);
           verification.push({
             step: index,
@@ -456,36 +512,80 @@ export async function runActions(session, args) {
           continue;
         }
         if (action === 'select') {
+          // 方案 4.3 / PR03：选完要**比对控制器的最终值**，而不是"找到了一个 option"。
+          // 旧实现在这里读 `chosen.ok`：只要页面里有一个同名选项就算成功，哪怕 change 回调把
+          // 值改了回来（请求"上海"、最终停在 bj，回执仍写 verification=ok）。现在的四步是：
+          //   ① 先只解析、不改值：精确 value 优先，label/text 只作退路，命中多项即拒绝歧义；
+          //   ② 记住 expectedValue，再设值并发出 input/change；
+          //   ③ 在剩余预算内重读 DOM value（不拿 AX 的值来比），必要时等它稳定；
+          //   ④ 比对 actualValue 与 expectedValue：相等 ok，不等 mismatch，读不到 unavailable。
           const value = String(step.value ?? '');
           const identity = resolveRef(session, step?.ref, boundTarget);
           if (identity.backendNodeId === 0) throw new CdpError('this reference names a node the browser did not give a backend id for', 'BROWSER_NO_NODE');
-          actionSent = true;
-          const chosen = await callOnNode(session, sessionId, identity.backendNodeId, `function (value) {
+          const choice = await callOnNode(session, sessionId, identity.backendNodeId, `function (value) {
             const el = this;
             const options = Array.from(el.options ?? []);
-            const option = options.find((one) => one.value === value || one.label === value || one.text === value);
-            if (option === undefined) return { ok: false, value: el.value, options: options.map((one) => one.value) };
+            const byValue = options.filter((one) => String(one.value) === value);
+            const byLabel = options.filter((one) => one.label === value || one.text === value);
+            const matches = byValue.length > 0 ? byValue : byLabel;
+            const offered = options.map((one) => one.value);
+            if (matches.length === 0) return { status: 'missing', offered };
+            if (matches.length > 1) return { status: 'ambiguous', matches: matches.map((one) => one.value), offered };
+            return { status: 'ok', expectedValue: String(matches[0].value), label: String(matches[0].label ?? matches[0].text ?? ''), offered };
+          }`, [{ value }], options());
+          if (choice?.status !== 'ok') {
+            const offered = JSON.stringify(choice?.offered ?? []);
+            const why = choice?.status === 'ambiguous'
+              ? `${JSON.stringify(value)} matches more than one option (${JSON.stringify(choice?.matches ?? [])}); refusing to guess which one was meant`
+              : `no option matched ${JSON.stringify(value)}; the control offers ${offered}`;
+            performed.push(`select ${JSON.stringify(value)} in ${identity.role} "${identity.name}" — refused before changing anything`);
+            verification.push({ step: index, kind: 'value', status: 'mismatch', note: why });
+            // 什么都没写出去：这仍是"未派发"，不是 unknown。
+            failedAt = index;
+            outcome = 'failed';
+            error = why;
+            break;
+          }
+          const expectedValue = String(choice.expectedValue);
+          actionSent = true;
+          await callOnNode(session, sessionId, identity.backendNodeId, `function (expected) {
+            const el = this;
             const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
-            if (setter) setter.call(el, option.value); else el.value = option.value;
+            if (setter) setter.call(el, expected); else el.value = expected;
             el.dispatchEvent(new Event('input', { bubbles: true }));
             el.dispatchEvent(new Event('change', { bubbles: true }));
-            return { ok: true, value: el.value };
-          }`, [{ value }], options());
-          const after = await axValueOf(session, sessionId, identity.backendNodeId, options());
-          const ok = chosen?.ok === true;
-          performed.push(`select ${JSON.stringify(value)} in ${identity.role} "${identity.name}"`);
+            return typeof el.value === 'string' ? el.value : String(el.value ?? '');
+          }`, [{ value: expectedValue }], options());
+          const actual = await measuredVerify(() => settledDomValueOf(session, sessionId, identity.backendNodeId, options));
+          // AX 只是旁证：它可能晚一拍，也可能给的是标签而不是 value。写进 note，不参与判定。
+          const aux = await axValueOf(session, sessionId, identity.backendNodeId, options());
+          performed.push(`select ${JSON.stringify(value)} in ${identity.role} "${identity.name}" (expected ${JSON.stringify(expectedValue)})`);
+          if (!actual.ok) {
+            verification.push({
+              step: index,
+              kind: 'value',
+              status: 'unavailable',
+              note: `the value was set to ${JSON.stringify(expectedValue)}, but it could not be read back (${actual.reason}); the tree shows ${JSON.stringify(aux.value)}`,
+            });
+            failedAt = index;
+            // 写已经派出去了，结果读不回来：unknown 才是诚实的状态，不能记成失败（那会诱发重放）。
+            outcome = 'unknown';
+            error = `the select was set to ${JSON.stringify(expectedValue)} and could not be read back, so whether it took is unknown`;
+            break;
+          }
+          const matched = actual.value === expectedValue;
           verification.push({
             step: index,
             kind: 'value',
-            status: ok ? 'ok' : 'mismatch',
-            note: ok
-              ? `the control's value is now ${JSON.stringify(chosen.value)} (the tree shows ${JSON.stringify(after.value)})`
-              : `no option matched ${JSON.stringify(value)}; the control offers ${JSON.stringify(chosen?.options ?? [])}`,
+            status: matched ? 'ok' : 'mismatch',
+            note: matched
+              ? `the control's value is ${JSON.stringify(actual.value)} (the tree shows ${JSON.stringify(aux.value)})`
+              : `the control was set to ${JSON.stringify(expectedValue)}, and its final value is ${JSON.stringify(actual.value)}${actual.settled === false ? ' (still moving when it was read)' : ''} — a change handler may have put it back`,
           });
-          if (!ok) {
+          if (!matched) {
             failedAt = index;
             outcome = 'failed';
-            error = `nothing in that control matches ${JSON.stringify(value)} (offered: ${JSON.stringify(chosen?.options ?? [])})`;
+            error = `the control did not take ${JSON.stringify(expectedValue)}: it reports ${JSON.stringify(actual.value)}`;
             break;
           }
           continue;
@@ -634,6 +734,8 @@ export async function runActions(session, args) {
     return {
       performed,
       verification,
+      // 方案 4.9 的 verifyMs：只算验证性读取，不含派发。
+      verifyMs: Math.round(verifyMs),
       failedAt,
       actionSent,
       outcome,

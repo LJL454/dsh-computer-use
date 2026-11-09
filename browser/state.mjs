@@ -14,6 +14,8 @@
  */
 
 import { CdpError, listTargets } from './connection.mjs';
+import { formatBrowserNode } from './contracts.mjs';
+export { formatBrowserNode } from './contracts.mjs';
 
 /** The starting budgets (§11), with the caps the plan names. */
 export const BROWSER_BUDGETS = Object.freeze({
@@ -48,11 +50,6 @@ function statesOf(axNode) {
 }
 
 /** One line of a node, the way the desktop reader writes them. */
-export function formatBrowserNode(node) {
-  const states = node.states.length > 0 ? ` [${node.states.join(',')}]` : '';
-  const value = node.value === undefined || node.value === '' ? '' : ` = ${JSON.stringify(node.value)}`;
-  return `${node.ref ? `[${node.ref}] ` : ''}${node.role} ${JSON.stringify(node.name)}${value}${states}`;
-}
 
 /**
  * One session's view of one browser: its references, its snapshots, and the document

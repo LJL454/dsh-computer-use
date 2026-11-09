@@ -1,0 +1,72 @@
+{
+  "schema": "dsh.character.pack/v2",
+  "assetVersion": "layered-fixture",
+  "alpha": "straight-rgba",
+  "renderMode": "layered",
+  "notes": "\u6d4b\u8bd5\u5939\u5177\uff1a\u53ea\u6709 1 \u5e27\u8eab\u4f53 + 1 \u5e27\u5c3e\u5df4\u7247\u533a\uff0c\u7528\u6765\u8dd1\u901a layered \u5206\u652f\uff1b\u4e0d\u662f\u6b63\u5f0f\u7f8e\u672f\u3002",
+  "clips": {
+    "idle": {
+      "atlas": "body.png",
+      "frameSize": [
+        384,
+        512
+      ],
+      "grid": [
+        1,
+        1
+      ],
+      "frameCount": 1,
+      "loop": true,
+      "durationsMs": [
+        1000
+      ],
+      "totalMs": 1000,
+      "anchorPx": [
+        196,
+        471
+      ],
+      "contentBounds": [
+        45,
+        13,
+        302,
+        458
+      ],
+      "bytes": 294171,
+      "sha256": "96f258ca17bb58dd339ceff114cbcb758a96ac530d29432fe5e11d078991a4b7"
+    }
+  },
+  "parts": [
+    {
+      "name": "tail",
+      "atlas": "tail.png",
+      "frameSize": [
+        134,
+        140
+      ],
+      "grid": [
+        1,
+        1
+      ],
+      "frameCount": 1,
+      "pivot": [
+        250,
+        360
+      ],
+      "zOrder": 1,
+      "contentBounds": [
+        0,
+        0,
+        97,
+        104
+      ],
+      "motion": {
+        "axis": "x",
+        "amplitude": 0.04,
+        "periodMs": 3000,
+        "phase": 0.2
+      },
+      "bytes": 22483,
+      "sha256": "d11fe23593e75bc7adb578d0652f926878bedc578f22182a8c7638fcb284f7b0"
+    }
+  ]
+}

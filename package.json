@@ -1,10 +1,10 @@
 {
   "name": "@local/dsh-computer-use",
-  "version": "1.40.3",
+  "version": "1.50.1",
   "license": "MIT",
   "author": "LJL454 <134773405+LJL454@users.noreply.github.com>",
   "type": "module",
-  "description": "鐢佃剳鎿嶄綔 (computer use) capability for DeepSeek Harness: screenshot, mouse, keyboard, clipboard, app launch, window and UI Automation tools, batched actions, coded failures, plus a 鐢佃剳鎿嶄綔 toggle chip in the composer tool row.",
+  "description": "电脑操作 (computer use) capability for DeepSeek Harness: screenshot, mouse, keyboard, clipboard, app launch, window and UI Automation tools, batched actions, coded failures, plus a 电脑操作 toggle chip in the composer tool row.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
@@ -114,7 +114,12 @@
     "capture-format-probe.ps1",
     "cleanup-test-windows.mjs",
     "tests",
-    "tools"
+    "tools",
+    "interaction",
+    "assets",
+    "native/indicator-helper/build/dsh-interaction-indicator.exe",
+    "startup-performance-test.mjs",
+    "call-cadence-test.mjs"
   ],
   "engines": {
     "node": ">=20",

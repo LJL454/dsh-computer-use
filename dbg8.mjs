@@ -1,0 +1,13 @@
+﻿import { spawn } from "node:child_process";
+const real = "E:/inkos/work/dsh-computer-use/native/indicator-helper/build/dsh-interaction-indicator.exe";
+const child = spawn(real, [], { stdio: ["pipe","pipe","pipe"], windowsHide: true });
+child.stdout.setEncoding("utf8");
+child.stdout.on("data", (c) => process.stdout.write(c));
+child.stderr.on("data", (c) => console.log("ERR", String(c)));
+const send = (m) => child.stdin.write(JSON.stringify(m) + "\n");
+send({ requestId: "h", method: "hello", protocolVersion: 1 });
+setTimeout(() => send({ requestId: "b", method: "beginScope", scopeId: "cur-1", epoch: 1 }), 200);
+setTimeout(() => send({ requestId: "s", method: "setVisualPreferences", settingsRevision: 1, preferences: { cursorHalo: false } }), 400);
+setTimeout(() => send({ requestId: "k", method: "health" }), 600);
+setTimeout(() => send({ requestId: "q", method: "shutdown" }), 900);
+setTimeout(() => { child.kill(); process.exit(0); }, 3000);

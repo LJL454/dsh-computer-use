@@ -276,13 +276,16 @@ const slotContext = {
 
 exports_.apply(slotContext);
 check('a style element was injected', styleElements.length === 1 && styleElements[0].textContent.includes('.dsh-cu-chip'));
-check('injected into conversation.input.left', injections.length === 1 && injections[0] === 'conversation.input.left', injections.join(', '));
-check('registered exactly one slot entry', slotRegistrations.length === 1, String(slotRegistrations.length));
-const entry = slotRegistrations[0];
-check('slot name is conversation.input.left', entry.options.name === 'conversation.input.left', entry.options.name);
-check('entry id is computer-use', entry.options.id === 'computer-use', entry.options.id);
-check('entry label is 电脑操作', entry.options.label === '电脑操作', entry.options.label);
-check('entry declares an order', Number.isFinite(entry.options.order), String(entry.options.order));
+// 客户端现在注册**两处**：设置左栏的「动画设置」与合成器上的「电脑操作」芯片。
+// 这里关心的是芯片，所以按 slot 名字挑，而不是拿第一个（顺序变了测试就跟着坏）。
+const chipInjections = injections.filter((key) => key === 'conversation.input.left');
+check('injected into conversation.input.left', chipInjections.length === 1, injections.join(', '));
+check('registered the settings section and the chip', slotRegistrations.length === 2, String(slotRegistrations.length));
+const entry = slotRegistrations.find((one) => one.options.name === 'conversation.input.left');
+check('slot name is conversation.input.left', entry?.options.name === 'conversation.input.left', String(entry?.options.name));
+check('entry id is computer-use', entry?.options.id === 'computer-use', String(entry?.options.id));
+check('entry label is 电脑操作', entry?.options.label === '电脑操作', String(entry?.options.label));
+check('entry declares an order', Number.isFinite(entry?.options.order), String(entry?.options.order));
 check('entry does not reuse a shipped id', !['permission', 'plan', 'model', 'activity'].includes(entry.options.id), entry.options.id);
 
 console.log('\n== render, capability off ==');

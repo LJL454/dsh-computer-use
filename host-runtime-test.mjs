@@ -128,9 +128,11 @@ async function main() {
   const last = afterRead.runtime.trace.at(-1);
   check('and the span names it, with a duration', last?.tool === 'computer_windows' && Number.isFinite(last.ms), JSON.stringify(last));
   check('the span says it succeeded', last?.ok === true, JSON.stringify(last));
+  check('the first call has no invented model/wait gap', last?.gapBeforeMs === undefined, JSON.stringify(last));
 
   const shot = await harness.tools.get('computer_screenshot').execute({ format: 'png', region: { x: 0, y: 0, width: 64, height: 48 } }, EXEC);
   const afterShot = await status();
+  check('the next real tool records a non-negative external gap', Number.isFinite(afterShot.runtime.trace.at(-1)?.gapBeforeMs) && afterShot.runtime.trace.at(-1).gapBeforeMs >= 0, JSON.stringify(afterShot.runtime.trace.at(-1)));
   check('observation cost is counted in pixels and bytes', afterShot.runtime.metrics.screenshots >= 1 && afterShot.runtime.metrics.screenshotPixels >= 64 * 48 && afterShot.runtime.metrics.screenshotBytes > 0,
     JSON.stringify(afterShot.runtime.metrics));
   check('the span records the image it delivered', Number.isFinite(shot.imageWidth) && afterShot.runtime.trace.at(-1)?.image === `${shot.imageWidth}x${shot.imageHeight}`,

@@ -1,0 +1,11 @@
+﻿import { IndicatorSupervisor } from "./interaction/indicator-supervisor.mjs";
+const real = "E:/inkos/work/dsh-computer-use/native/indicator-helper/build/dsh-interaction-indicator.exe";
+const s = new IndicatorSupervisor({ exePath: real, trace: (n, d) => console.log("trace", n, JSON.stringify(d)), timeouts: { stopMs: 2000 } });
+await s.start();
+console.log("ready ok");
+await s.beginScope({ scopeId: "x", epoch: 1 });
+console.log("scope ok");
+const t0 = Date.now();
+const closed = await s.stop();
+console.log("closed:", JSON.stringify(closed), "in", Date.now() - t0, "ms", "state", s.state, "stderr", JSON.stringify(s.stderrTail));
+process.exit(0);

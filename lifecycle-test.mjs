@@ -329,9 +329,12 @@ const queuedOutcome = await queued;
 check('a request cancelled while queued is refused', queuedOutcome.ok === false && queuedOutcome.code === 'ABORTED', JSON.stringify(queuedOutcome).slice(0, 160));
 check('and it is reported as never dispatched', queuedOutcome.dispatched === false, String(queuedOutcome.dispatched));
 check('and the message says nothing was sent', String(queuedOutcome.message).includes('nothing was sent'), String(queuedOutcome.message).slice(0, 160));
-const queuedElapsed = Date.now();
+// "被丢掉"要用**先后顺序**证明，不能用墙钟阈值：原来的写法断言"取消后 1.8 秒内第一次调用必须结束"，
+// 那既不等于"排队那条有没有跑"，也会在快机器上（实测 1.86 s）判失败 —— 一条会误导人的断言。
+const queuedSettledAt = Date.now();
 await first;
-check('the queued action was dropped rather than run after the cancel', Date.now() - queuedElapsed < 1_800, `${Date.now() - queuedElapsed} ms after the first call finished`);
+const firstSettledAt = Date.now();
+check('the queued action was dropped rather than run after the cancel', queuedSettledAt <= firstSettledAt, `queued settled ${firstSettledAt - queuedSettledAt} ms before the running call finished`);
 
 console.log('\n== a running request is cancelled in the worker, not merely abandoned ==');
 const runningController = new AbortController();
@@ -618,6 +621,25 @@ export class PowerShellBackend {
     }
     return cancelled;
   }
+  /**
+   * 方案 4.5 / PR07：撤销一个会话只取消它自己的请求。stub 里的挂起项没有会话归属，
+   * 所以这里和 cancelAll 做同一件事，但**记录**调用方到底用的是哪个入口 —— 这正是被修的
+   * 那条缺陷：共用 worker 时对所有人 cancelAll，会打断另一个会话。
+   */
+  cancelSession(sessionKey, reason) {
+    const s = state();
+    s.cancelSessionCalls.push({ sessionKey, reason });
+    let cancelled = 0;
+    for (const [id, entry] of [...s.hung]) {
+      s.hung.delete(id);
+      cancelled += 1;
+      const error = new ComputerUseBackendError(entry.cmd + ' was cancelled by the host', 'CANCELLED');
+      error.dispatched = true;
+      error.canceled = true;
+      entry.reject(error);
+    }
+    return cancelled;
+  }
   async request(cmd, args = {}, options = {}) {
     const s = state();
     s.calls.push({ cmd, args });
@@ -649,6 +671,7 @@ globalThis.__cuStub = {
   instances: [],
   hung: new Map(),
   cancelCalls: [],
+  cancelSessionCalls: [],
   hangWhen: null,
   batchError: '',
   frames: [],
@@ -846,7 +869,7 @@ console.log('\n== turning the switch off is a stop, not a flag ==');
 const revoked = await postState({ sessionId: 'session-a', enabled: false });
 check('the revoke reports what it cancelled', revoked.payload.revoked?.cancelled >= 1, JSON.stringify(revoked.payload.revoked));
 check('the state is now stopped', revoked.payload.control.state === 'stopped', JSON.stringify(revoked.payload.control));
-check('the transport was told to cancel everything', globalThis.__cuStub.cancelCalls.length >= 1, JSON.stringify(globalThis.__cuStub.cancelCalls));
+check("the transport was told to cancel that session's requests", globalThis.__cuStub.cancelSessionCalls.length >= 1 && globalThis.__cuStub.cancelSessionCalls.every((one) => one.sessionKey === 'session-a'), JSON.stringify(globalThis.__cuStub.cancelSessionCalls));
 check('the worker was asked to release held input', globalThis.__cuStub.calls.some((call) => call.cmd === 'release'), JSON.stringify(globalThis.__cuStub.calls.map((c) => c.cmd)));
 const hangingOutcome = await hangingBatch;
 check('the in-flight call ended as cancelled', hangingOutcome.ok === false && hangingOutcome.message.includes('CANCELLED'), hangingOutcome.message?.slice(0, 160));

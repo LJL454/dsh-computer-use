@@ -69,6 +69,21 @@ window.__ModuleLoader__.load({
     const IDLE_SYNC_MS = 5000;
 
     const CSS = `
+.dsh-cu-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 2px;
+}
+.dsh-cu-settings-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+.dsh-cu-settings-hint {
+  font-size: 12px;
+  opacity: 0.7;
+  line-height: 1.5;
+}
 .dsh-cu-chip {
   box-sizing: border-box;
   display: inline-flex;
@@ -163,6 +178,93 @@ window.__ModuleLoader__.load({
   .dsh-cu-chip[data-control="stopping"] .dsh-cu-dot {
     animation: none;
   }
+}
+/* 效果面板（方案 4.18.8）：与芯片同一排，弹层向上展开。 */
+.dsh-cu-fx {
+  position: relative;
+  display: inline-flex;
+}
+.dsh-cu-fx-trigger {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid rgba(120, 132, 158, .28);
+  border-radius: 13px;
+  background: rgba(30, 34, 46, .04);
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.dsh-cu-fx-trigger[aria-expanded="true"] {
+  border-color: rgba(96, 150, 255, .55);
+  background: rgba(96, 150, 255, .12);
+}
+.dsh-cu-fx-panel {
+  position: absolute;
+  bottom: 32px;
+  left: 0;
+  z-index: 40;
+  width: 268px;
+  padding: 10px 12px;
+  border: 1px solid rgba(120, 132, 158, .26);
+  border-radius: 10px;
+  background: rgba(24, 27, 36, .96);
+  color: #ecedf3;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .32);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.dsh-cu-fx-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 3px 0;
+  cursor: pointer;
+}
+.dsh-cu-fx-row input {
+  margin: 3px 0 0;
+}
+.dsh-cu-fx-name {
+  display: block;
+}
+.dsh-cu-fx-note {
+  display: block;
+  opacity: .62;
+  font-size: 11px;
+}
+.dsh-cu-fx-group {
+  margin-top: 10px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(120, 132, 158, .18);
+}
+.dsh-cu-fx-group-title {
+  font-size: 11px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  opacity: .55;
+  margin-bottom: 2px;
+}
+.dsh-cu-fx-row input[type="range"] {
+  width: 84px;
+}
+.dsh-cu-fx-row select {
+  min-width: 96px;
+}
+.dsh-cu-fx-foot {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(120, 132, 158, .22);
+  opacity: .72;
+  font-size: 11px;
+}
+.dsh-cu-fx-error {
+  margin-top: 6px;
+  color: #ffb4b4;
+  font-size: 11px;
 }
 `;
 
@@ -602,6 +704,245 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * 电脑控制动画的七个开关（方案 3.5 / 4.18.8）。
+     *
+     * 这里**没有**"关闭操作提示"或"关闭 Esc"：横幅与取消入口是安全表面，不是装饰。面板底部
+     * 那句话是对用户的承诺，也是对后来改代码的人的约束。
+     */
+    const EFFECT_ROWS = [
+      { key: 'enabled', label: '动画总开关', note: '关掉后装饰不画；边缘提示、两段文字与 Esc 仍然有效' },
+      { key: 'bannerCharacter', label: '横幅角色', note: '横幅左端的吃饭循环' },
+      { key: 'cursorCharacter', label: '光标角色', note: '鼠标旁的状态动画（只在电脑控制期间）' },
+      { key: 'cursorHalo', label: '光标光晕', note: '跟随真实指针的雾化光（只在电脑控制期间）' },
+      { key: 'edgeBreathing', label: '边缘呼吸', note: '屏幕四边的轻微明暗' },
+      { key: 'reducedMotion', label: '减少动态', note: '不做形变，只换明暗' },
+      { key: 'bannerDecoration', label: '横幅装饰', note: '胶囊双描边、外光、小鲸与海浪' },
+    ];
+
+    /**
+     * 日常鼠标角色（方案 3.5）：**独立开关**，默认关闭。
+     *
+     * 说明文字按方案原话写：用户要能一眼看出"这不是电脑操作授权"，也不需要先开电脑控制才能开它。
+     */
+    const COMPANION_ROW = {
+      key: 'cursorCompanion',
+      label: 'DeepSeek Harness 运行时显示鼠标角色',
+      note: '在 DeepSeek Harness 运行期间，让角色跟随鼠标。不会开启电脑操作或高亮提示。',
+    };
+
+    /** 人物可见高度（DIP）：按"人物高度"而不是整张透明画布（方案 4.1）。 */
+    const HEIGHT_ROWS = [
+      { key: 'bannerCharacterHeightDip', label: '横幅人物高度', min: 112, max: 176, step: 4, note: '可见主体高度（DIP）' },
+      { key: 'cursorCharacterHeightDip', label: '光标人物高度', min: 72, max: 128, step: 4, note: '可见主体高度（DIP）' },
+    ];
+
+    /** 横幅主题（方案 4.7）。 */
+    const THEME_ROW = {
+      key: 'bannerTheme',
+      label: '横幅主题',
+      note: 'ocean = 海洋胶囊；plain = 基础底板',
+      options: [['ocean', '海洋胶囊'], ['plain', '基础底板']],
+    };
+
+    /** 读一次偏好。形状不对就是错误，不当成默认值。 */
+    async function requestEffects(signal) {
+      const response = await fetch(`${ROUTE}/visual-preferences`, { signal, headers: { accept: 'application/json' } });
+      const payload = await readJson(response);
+      if (!response.ok) throw replyFailure(response, payload, `HTTP ${response.status}`);
+      if (payload?.ok === false) throw replyFailure(response, payload, 'the host refused the read');
+      if (payload?.values === null || typeof payload?.values !== 'object') throw new Error('the host did not report visual preferences');
+      return payload;
+    }
+
+    /** 保存一处改动；宿主的回复是唯一权威。 */
+    async function saveEffects(patch) {
+      const response = await fetch(`${ROUTE}/visual-preferences`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ values: patch }),
+      });
+      const payload = await readJson(response);
+      if (!response.ok) throw replyFailure(response, payload, `HTTP ${response.status}`);
+      if (payload?.ok === false) throw replyFailure(response, payload, 'the host refused the change');
+      if (payload?.values === null || typeof payload?.values !== 'object') throw new Error('the host did not report visual preferences');
+      return payload;
+    }
+
+    /**
+     * The effects control.
+     *
+     * 与芯片一样，"显示什么"只由宿主的回复决定：本地不预置开关状态，也不在失败时把开关拨回去
+     * 假装成功过 —— 失败就照实说"没能保存"。
+     */
+    /**
+     * 六个开关的读写状态（设置页与合成器芯片共用）。
+     *
+     * 抽出来是因为**入口有两个、状态机只有一台**：设置对话框里的插件页是正式入口，
+     * 合成器上的「效果」芯片是快捷方式。两份实现迟早会走偏（一边记住 note、一边忘），
+     * 所以这里只写一遍。
+     */
+    function useEffectsEditor() {
+      const [state, setState] = React.useState({ phase: 'loading', values: null, revision: 0 });
+      const [busy, setBusy] = React.useState(null);
+      const [note, setNote] = React.useState('');
+
+      React.useEffect(() => {
+        const controller = new AbortController();
+        let live = true;
+        requestEffects(controller.signal)
+          .then((payload) => {
+            if (!live) return;
+            setState({ phase: 'ready', values: payload.values, revision: payload.settingsRevision ?? 0 });
+          })
+          .catch((error) => {
+            if (!live || error?.name === 'AbortError') return;
+            setState({ phase: 'error', values: null, revision: 0 });
+            setNote(`未能读取设置：${error instanceof Error ? error.message : String(error)}`);
+          });
+        return () => {
+          live = false;
+          controller.abort();
+        };
+      }, []);
+
+      async function flip(key, value) {
+        if (busy !== null) return;
+        setBusy(key);
+        setNote('');
+        try {
+          const payload = await saveEffects({ [key]: value });
+          setState({ phase: 'ready', values: payload.values, revision: payload.settingsRevision ?? 0 });
+          const rejected = Array.isArray(payload.rejected) ? payload.rejected : [];
+          if (rejected.length > 0) setNote(`宿主拒绝了：${rejected.map((one) => one.key).join('、')}`);
+          else if (payload.companion !== null && payload.companion !== undefined && payload.companion.effectiveVisible === false) {
+            // 伴随回执是"实际可见"的答案：开关开了但角色没出现时，必须说出原因，而不是显示成功。
+            const reason = payload.companion.hiddenReason ?? payload.companion.error ?? 'unknown';
+            setNote(`已保存；角色当前没有显示（${reason}）。`);
+          } else if (payload.companion?.effectiveVisible === true) setNote('已保存；鼠标旁的角色马上生效。');
+          else if (payload.applied !== null && payload.applied !== undefined && payload.applied.applied === false) setNote('已保存；覆盖层下次出现时生效。');
+          else if (payload.applyError) setNote(`已保存，但没能推给覆盖层：${payload.applyError}`);
+        } catch (error) {
+          setNote(`未能保存：${error instanceof Error ? error.message : String(error)}`);
+        } finally {
+          setBusy(null);
+        }
+      }
+
+      return { state, busy, note, flip };
+    }
+
+    /** 一行开关。**直接返回元素**而不是组件：小渲染器只走一层，组件会藏住这些 input。 */
+    function effectRow(row, props) {
+      const values = props.state.values ?? {};
+      return React.createElement(
+        'label',
+        { key: row.key, className: 'dsh-cu-fx-row' },
+        React.createElement('input', {
+          type: 'checkbox',
+          checked: values[row.key] === true,
+          disabled: props.state.phase !== 'ready' || props.busy !== null,
+          onChange: (event) => { void props.flip(row.key, event.target.checked); },
+        }),
+        React.createElement(
+          'span',
+          { key: 'text' },
+          React.createElement('span', { className: 'dsh-cu-fx-name' }, row.label),
+          React.createElement('span', { className: 'dsh-cu-fx-note' }, row.note),
+        ),
+      );
+    }
+
+    /** 电脑控制动画的开关（设置页与芯片共用）。 */
+    function EffectsRows(props) {
+      return React.createElement(
+        React.Fragment,
+        null,
+        ...EFFECT_ROWS.map((row) => effectRow(row, props)),
+      );
+    }
+
+    /** 日常伴随：单独一组，带自己的说明。 */
+    function CompanionRow(props) {
+      return React.createElement(
+        'div',
+        { className: 'dsh-cu-fx-group' },
+        React.createElement('div', { className: 'dsh-cu-fx-group-title' }, '日常鼠标角色'),
+        effectRow(COMPANION_ROW, props),
+      );
+    }
+
+    /** 人物高度与主题：尺寸按"人物可见高度"，主题只有两个明确选项。 */
+    function ShapeRows(props) {
+      const values = props.state.values ?? {};
+      return React.createElement(
+        'div',
+        { className: 'dsh-cu-fx-group' },
+        React.createElement('div', { className: 'dsh-cu-fx-group-title' }, '人物与横幅'),
+        ...HEIGHT_ROWS.map((row) => React.createElement(
+          'label',
+          { key: row.key, className: 'dsh-cu-fx-row' },
+          React.createElement('input', {
+            type: 'range',
+            min: row.min,
+            max: row.max,
+            step: row.step,
+            value: Number.isFinite(values[row.key]) ? values[row.key] : row.min,
+            disabled: props.state.phase !== 'ready' || props.busy !== null,
+            onChange: (event) => { void props.flip(row.key, Number(event.target.value)); },
+          }),
+          React.createElement(
+            'span',
+            { key: 'text' },
+            React.createElement('span', { className: 'dsh-cu-fx-name' }, `${row.label}（${Number.isFinite(values[row.key]) ? values[row.key] : row.min} DIP）`),
+            React.createElement('span', { className: 'dsh-cu-fx-note' }, row.note),
+          ),
+        )),
+        React.createElement(
+          'label',
+          { className: 'dsh-cu-fx-row' },
+          React.createElement(
+            'select',
+            {
+              value: typeof values[THEME_ROW.key] === 'string' ? values[THEME_ROW.key] : 'ocean',
+              disabled: props.state.phase !== 'ready' || props.busy !== null,
+              onChange: (event) => { void props.flip(THEME_ROW.key, event.target.value); },
+            },
+            ...THEME_ROW.options.map(([value, text]) => React.createElement('option', { key: value, value }, text)),
+          ),
+          React.createElement(
+            'span',
+            { key: 'text' },
+            React.createElement('span', { className: 'dsh-cu-fx-name' }, THEME_ROW.label),
+            React.createElement('span', { className: 'dsh-cu-fx-note' }, THEME_ROW.note),
+          ),
+        ),
+      );
+    }
+
+    /**
+     * 设置对话框左侧的独立条目「动画设置」。
+     *
+     * 这些是持久偏好，适合放在设置里；但不要塞进「内置插件」页 —— 那一页是给插件清单用的，
+     * 用户找动画开关时会先看左栏。
+     */
+    function AnimationSettingsSection() {
+      const editor = useEffectsEditor();
+      return React.createElement(
+        'div',
+        { className: 'dsh-cu-settings' },
+        React.createElement('div', { className: 'dsh-cu-settings-hint' }, '只影响覆盖层怎么画：操作提示、停止与物理 Esc 取消不受这些开关影响。'),
+        // 直接调用而不是 createElement：这些行是纯函数返回的元素，扁平渲染更好预测
+        // （测试里的小渲染器也只走一层）。
+        CompanionRow({ state: editor.state, busy: editor.busy, flip: editor.flip }),
+        EffectsRows({ state: editor.state, busy: editor.busy, flip: editor.flip }),
+        ShapeRows({ state: editor.state, busy: editor.busy, flip: editor.flip }),
+        React.createElement('div', { className: 'dsh-cu-fx-foot' }, '关掉「动画总开关」后装饰不画；边缘提示、两段文字与 Esc 仍然有效。日常鼠标角色与电脑控制动画分别保存。'),
+        editor.note === '' ? null : React.createElement('div', { className: 'dsh-cu-fx-error' }, editor.note),
+      );
+    }
+
+
+    /**
      * Client plugin body.
      * @param ctx - the browser-side Cordis context.
      */
@@ -613,6 +954,14 @@ window.__ModuleLoader__.load({
           style.textContent = CSS;
           document.head.appendChild(style);
         }
+        // 设置对话框左侧新增一个**独立条目**「动画设置」（不是塞进「内置插件」页）：
+        // `settings.section` 就是那个左栏槽，`label` 是栏里显示的字。
+        ctx.slots.inject('settings.section', () => ctx.slots.register(
+          { name: 'settings.section', id: 'computer-use-animation', order: 30, label: () => '动画设置' },
+          AnimationSettingsSection,
+        ));
+        // 合成器上**只留「电脑操作」**这一个芯片：它是本次会话的开关（开/关能力）。
+        // 「效果」芯片不再注册 —— 那些是持久偏好，去处是设置左栏的「动画设置」。
         // Deliberately not wrapped in ctx.effect: slots.inject already runs the
         // callback inside its own effect, waits until the slot is actually
         // declared, and re-runs it whenever that declaration changes epochs. The
@@ -621,7 +970,7 @@ window.__ModuleLoader__.load({
           { name: 'conversation.input.left', id: 'computer-use', order: 40, label: LABEL },
           ComputerUseChip,
         ));
-        console.info('[computer-use] composer chip registered');
+        console.info('[computer-use] settings section + composer chip registered');
       } catch (error) {
         console.error('[computer-use] apply failed:', error);
       }

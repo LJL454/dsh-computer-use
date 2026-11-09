@@ -111,6 +111,28 @@ export function createExecutionRegistry() {
     return controllers.length;
   }
 
+  /**
+   * 中止**所有**会话的在飞调用（物理 Esc 的紧急停止用）。
+   *
+   * 与会话级的 bort 不同，这条不挑会话：用户按下 Esc 时面对的是"此刻正在动桌面的那件事"，
+   * 而不确定它属于哪个会话。返回被中止的数量，调用方据此报告"影响了几次调用"。
+   * @param reason - 记在被中止调用上的原因。
+   * @returns 被中止的调用数。
+   */
+  function abortAll(reason) {
+    let total = 0;
+    for (const [, set] of inFlight) {
+      for (const controller of [...set]) {
+        controller.abort(new Error(reason));
+        total += 1;
+      }
+    }
+    return total;
+  }
+
+  /** 所有正在撤销（`停止中`）的会话标识。 */
+  const stoppingSessions = () => [...stopping];
+
   /** 这个会话是否正在撤销（芯片据此显示"停止中"）。 */
   const isStopping = (sessionId) => stopping.has(sessionKey(sessionId));
   /** 标记撤销开始。 */
@@ -149,5 +171,5 @@ export function createExecutionRegistry() {
     }
   }
 
-  return { track, count, abort, isStopping, beginStop, endStop, runSessionCall };
+  return { track, count, abort, abortAll, isStopping, beginStop, endStop, stoppingSessions, runSessionCall };
 }

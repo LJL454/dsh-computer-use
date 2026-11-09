@@ -34,6 +34,25 @@
 宿主模块解析、peer 契约、profile 安装这三层都已经过。第 12 行走的是**真正的工具调用链**
 （tool → bridge → worker → GDI/SendInput），补上了 1–7 未覆盖的那一段。
 
+## 覆盖层 v2（1.50.1，2026-11-06）
+
+判据全部是**可重跑的断言**，不是肉眼："窗口建了"不等于"画出来了"，所以每一项都落在协议字段或像素差分上。
+
+| # | 场景 | 方式 | 结果 |
+|---|---|---|---|
+| V1 | 窗口结构：每屏 4 边 + 1 横幅 + 全局 1 光标 | `indicator-helper-test.mjs` 断言 `counts` | `displayWindowCount = 屏数×5`，`presentOkWindowCount = display + cursor` |
+| V2 | 纯几何矩阵（7 组显示器 × 4 档 DPI，含竖屏/负坐标/极小屏） | `overlay-geometry-test.mjs` → `exe --self-test` | **407 条**断言 0 失败（不重叠、在屏内、面积公式、角部单调与接缝连续、横幅/光标放得下人） |
+| V3 | 伴随 / 控制 / 暂停 / 减少动态 交接 | `indicator-helper-test.mjs` 可见性矩阵一轮 | 控制中伴随仍只有 1 个光标窗口；暂停→结束 scope→恢复不复活（`displayWindowCount: 0`）；关伴随后 `cursorWindows: 0`；越界高度被夹紧；`reducedMotion` 下 `characterFrames` 冻结 |
+| V4 | DPI 感知（PerMonitorV2） | `node tools/overlay-probe.mjs`（内含 `probe-overlay-windows.ps1`） | 实测窗口矩形：`DshOverlayWindow\|2560x54@0,0`、`…\|2560x54@0,1386`、`…\|54x1332@0,54`、`…\|54x1332@2506,54`、`…\|776x306@892,6`、`DshOverlayCursor\|342x342`；清单嵌入**前**同一探针读到的是 `1707x36`（DWM 按 150% 拉伸） |
+| V5 | 像素确认（`WDA_EXCLUDEFROMCAPTURE` 会让截图看不见覆盖层） | 同一探针的"显示 / 暂停"两张截图差分 | 差分图里能定位到横幅、人物、四条边与光标光晕；`health` 同时报 `bannerHr: 0x00000000`、`bannerDraws > 0`、`topEdgeAlpha > 0`；样张 `work/_scratch/shots/round4-banner.png` |
+| V6 | 单核 CPU（2560×1440 / 150%，墙钟口径） | `tools/measure-helper-cost.mjs` 九场景 | 仅边缘呼吸 0.15%、全开静止 0.18%、静态与减少动态 0.00% |
+| V7 | 角色资源（pack v2，吃饭 16 帧） | `character-pack.py --check` | 7 段 sha256/字节数/时长/`contentBounds` 全部一致 |
+| V8 | 资源稳定性（100 次 scope 启停 + 偏好切换） | `tools/soak-overlay.mjs`（60 轮） | 句柄 285 → 285，工作集 +0.5 MB，6/6 通过；修前为每轮 +3.8 句柄（根因：每窗口各建一份 D2D/DWrite 工厂 + `GetFactory` 借用引用被误 Release） |
+
+**未验证（不计入 PASS）**：真实双屏与混合 DPI 热插拔、200% DPI 下的像素级画质、8 小时常驻、
+全开**持续移动**的 CPU、分层部件（`renderMode: layered` 引擎在，资源仍是 `composite`）、
+重绘稿画到格子外的帧（`release` 0–4、`drag` 2–3）需美术补画。
+
 ## 未执行（NOT VERIFIED，不计入 PASS）
 
 | # | 场景 | 为什么没跑 |

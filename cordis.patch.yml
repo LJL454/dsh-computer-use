@@ -23,6 +23,27 @@
         # allowed to drive the mouse and keyboard without asking.
         defaultEnabled: false
 
+        # ── 交互覆盖层（方案 4.15–4.18，O2 起接、O6 起默认开启） ──
+        # 写操作派发前等覆盖层就绪（banner 已呈现 + Esc 钩子已装）；物理 Esc 会让宿主闩锁并停止派发。
+        # 关掉它只需把 enabled 改回 false：电脑操作本身不依赖覆盖层，缺它按降级处理继续工作。
+        interactionIndicator:
+          enabled: true
+          # exePath 留空 = 用包内的 native/indicator-helper/build/dsh-interaction-indicator.exe。
+          exePath: ''
+
+        # ── 视觉效果的初值（宿主设置页与「效果」面板都会写这里之外的存储） ──
+        # 关动画关不掉"操作提示与取消能力"：这些开关只影响画面。
+        visualEffects:
+          # 总开关：true 才会画覆盖层、光标与角色；Esc 与停止永远有效。
+          enabled: true
+          # 横幅角色（左端的吃饭循环）与光标角色都已实机截图确认；光标窗口按"要不要画角色"自动放大，
+          # 否则 52 DIP 的角色会被 76 DIP 的光晕窗口裁掉半截。
+          bannerCharacter: true
+          cursorCharacter: true
+          cursorHalo: true
+          edgeBreathing: true
+          reducedMotion: false
+
         # ── 原 @local/dsh-token-guard 的配置（键名不变，便于与历史指标对照） ──
         tokenGuard:
           enabled: true

@@ -13,14 +13,13 @@
  */
 import { importHostModule, describeHostEntry } from './internal/host-packages.mjs';
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdirSync, readFileSync, lstatSync } from 'node:fs';
+import { mkdirSync, readFileSync, lstatSync, existsSync } from 'node:fs';
 import { mkdir, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PowerShellBackend, ComputerUseBackendError } from './backend/bridge.js';
-import { CdpConnection, CdpError } from './browser/connection.mjs';
-import { BrowserSession, formatBrowserNode } from './browser/state.mjs';
-import { runActions, clampActionBudget, BROWSER_ACTIONS } from './browser/actions.mjs';
+import { formatBrowserNode, clampActionBudget, BROWSER_ACTIONS } from './browser/contracts.mjs';
+import { browserStepParameterSchema, validateBrowserSteps } from './internal/actions/schemas.mjs';
 import { applyTokenGuard } from './internal/token-guard.mjs';
 import { applyAppLaunch } from './internal/app-launch.mjs';
 import {
@@ -35,8 +34,9 @@ import {
   PACKAGE_ROOT,
   readPackageManifest,
   summarizeRelease,
-  verifyRelease,
 } from './internal/release-manifest.mjs';
+import { createBackgroundReleaseCheck, deferStartupWork } from './internal/startup-work.mjs';
+import { createCallCadence } from './internal/call-cadence.mjs';
 import { claimInstance, describeInstance, releaseInstance } from './internal/instance-registry.mjs';
 import { detectHost } from './internal/preflight.mjs';
 import {
@@ -59,6 +59,13 @@ import {
   leaseReport,
 } from './internal/lease.mjs';
 import { sessionKey, createSessions } from './internal/sessions.mjs';
+import { capture as captureAdmission, check as checkAdmission } from './internal/admission.mjs';
+import { INDICATOR_PROTOCOL_VERSION, IndicatorSupervisor } from './interaction/indicator-supervisor.mjs';
+import { createCaptureExclusion } from './internal/capture-exclusion.mjs';
+import { VISUAL_DEFAULTS, createVisualPreferencesStore } from './internal/visual-preferences.mjs';
+import { ACTION_TABLE, previewPlan } from './internal/action-table.mjs';
+import { HOST_API_VERSION, createModuleHost } from './internal/module-host.mjs';
+import { buildVisualEffectsConfig, visualEffectsPatch } from './internal/visual-effects-config.mjs';
 import { combineSignals, describeCall, createExecutionRegistry } from './internal/execution.mjs';
 import { normalizeCaptureSpec, resolveFormat, screenshotEnvelope, createCaptureService } from './internal/capture.mjs';
 import { createRefRegistry } from './internal/refs.mjs';
@@ -94,8 +101,17 @@ import {
   OBSERVED_DIGEST_LIMIT,
 } from './internal/tool-contracts.mjs';
 import { createSchemaVisibility } from './internal/schema-visibility.mjs';
-import { collectDoctorReport } from './internal/doctor.mjs';
 import { applyDegraded } from './internal/degraded.mjs';
+
+let browserRuntime = null;
+function loadBrowserRuntime() {
+  return browserRuntime ??= Promise.all([
+    import('./browser/connection.mjs'), import('./browser/state.mjs'), import('./browser/actions.mjs'),
+  ]).then(([connection, state, actions]) => ({ ...connection, ...state, ...actions })).catch(error => {
+    browserRuntime = null;
+    throw error;
+  });
+}
 
 /**
  * 宿主自带的 `defineTool`，按**绝对路径**解析后取用。
@@ -271,6 +287,16 @@ function sendJson(res, status, payload) {
  * @param ctx - the plugin context carrying `tools` and `webServer`.
  * @param config - deployment configuration for this plugin row.
  */
+/** Config 由宿主读取以生成本插件的设置页（schemastery）。拿不到宿主包时它是 undefined，
+ * 插件照常加载，只是没有自动设置页 —— 见 internal/visual-effects-config.mjs 的两条保守规则。 */
+export let Config;
+try {
+  const built = await buildVisualEffectsConfig();
+  Config = built.Config;
+} catch {
+  Config = undefined;
+}
+
 export function apply(ctx, config = {}) {
   // 降级挂载：宿主依赖没导入成功时，只挂两条只读路由，不注册工具、不启动 worker。
   if (bootstrapError !== null) {
@@ -319,18 +345,43 @@ export function apply(ctx, config = {}) {
   /**
    * §G: the whole release identity, not just worker.ps1.
    *
-   * Computed once per apply. A shipped `release-manifest.json` is compared with the files on
-   * disk; a source checkout without one still reports its computed id so "which build is this?"
-   * has an answer. A mismatch is logged loudly here and reported as a fatal finding by doctor.
+   * A full comparison runs asynchronously after mounting; status explicitly reports pending
+   * until it finishes. Doctor awaits that same comparison. No file/hash checks are skipped.
    */
-  const release = verifyRelease(PACKAGE_ROOT, { version: VERSION });
+  const releaseCheck = createBackgroundReleaseCheck({
+    root: PACKAGE_ROOT,
+    version: VERSION,
+    onComplete: (release) => {
+      if (release.present && !release.matches) {
+        ctx?.logger?.error?.(
+          `computer-use: RELEASE_BUILD_MISMATCH — installed files do not match ${release.manifestPath} (computed ${release.buildId}, manifest ${release.manifest?.releaseBuildId ?? '?'}). This is a half-applied upgrade; reinstall the whole package and restart. Details: ${JSON.stringify(release.checks ?? {})}${release.error ? `; ${release.error}` : ''}`,
+        );
+      }
+    },
+  });
+  ctx.effect(() => () => releaseCheck.dispose(), 'computer-use: background release verification');
   const host = detectHost();
-  if (release.present && !release.matches) {
-    ctx?.logger?.error?.(
-      `computer-use: RELEASE_BUILD_MISMATCH — installed files do not match ${release.manifestPath} (computed ${release.buildId}, manifest ${release.manifest?.releaseBuildId ?? '?'}). This is a half-applied upgrade; reinstall the whole package and restart. Details: ${JSON.stringify(release.checks ?? {})}`,
-    );
-  }
   const defaultEnabled = config.defaultEnabled === true;
+  /** 视觉效果的偏好（方案 4.18.8 / PR17）：与截图目录同级，原子写入，坏文件回到默认值。 */
+  const visualPreferences = createVisualPreferencesStore({
+    filePath: typeof config.visualPreferencesPath === 'string' && config.visualPreferencesPath.trim() !== ''
+      ? config.visualPreferencesPath
+      : join(config.shotDir ?? join(tmpdir(), 'dsh-computer-use'), 'visual-preferences.json'),
+  });
+  visualPreferences.load();
+  // `config.visualEffects` 是**出厂初值**，不是每次启动的主宰。
+  //
+  // 它只在存储里从来没有过用户选择时写入（revision 0）。否则用户上次在「效果」面板或宿主设置页里改的
+  // 值，会在下一次启动被配置文件**覆盖回去** —— 那种"设置自己变回去了"的 bug，用户很难相信是程序干的。
+  const hostVisualEffects = visualEffectsPatch(config.visualEffects);
+  if (Object.keys(hostVisualEffects).length > 0 && visualPreferences.current.revision === 0) {
+    try {
+      visualPreferences.save(hostVisualEffects);
+    } catch (error) {
+      ctx.logger?.warn?.('computer-use: the host visual settings could not be saved: %s', String(error?.message ?? error));
+    }
+  }
+
   const shotRoot = typeof config.shotDir === 'string' && config.shotDir.trim() !== ''
     ? config.shotDir
     : join(tmpdir(), 'dsh-computer-use');
@@ -412,6 +463,311 @@ export function apply(ctx, config = {}) {
 
   /** 执行协调（在飞登记 / 停止状态 / 浏览器通道的会话上下文）：见 internal/execution.mjs。 */
   const execution = createExecutionRegistry();
+
+  /* ------------------------------------------------- interaction indicator -- */
+
+  /**
+   * 交互提示覆盖层（方案 4.13–4.16 / PR10）。
+   *
+   * 边界先说清楚：helper 只回答"视觉是否就绪"和"Esc 是否被按下"；它**不**判定动作成败、
+   * 不释放 held input。真正的停止仍然走 `backend/supervisor.mjs` 的六步协议。
+   *
+   * 默认关闭：O2 还没接入截图排除与降级提示，发布默认值要到 O5 按方案 4.18.8 翻转。测试与
+   * 部署可以用 `interactionIndicator.enabled: true` 打开，并用 `indicatorExePath` /
+   * `indicatorSpawn` 注入一个可控 helper。
+   */
+  /** 可选扩展的管家（方案 4.21）：不扫目录，只有显式登记才会出现在列表里。 */
+  const moduleHost = createModuleHost({ trace: (name, detail) => ctx.logger?.info?.('computer-use: %s %o', name, detail ?? {}) });
+
+  const indicatorOptions = config.interactionIndicator ?? {};
+  const indicatorEnabled = indicatorOptions.enabled === true;
+  // `exePath: ''` 表示"用包内那一个"，与"没写"同义。此前 `?? ` 把空串当成显式路径，于是配置文件里
+  // 留空会让 helper 被判成"没构建"（state: unavailable）——写操作会降级继续，但覆盖层永远不出现，
+  // 而且状态里只写 unavailable，很难看出是这里的问题。
+  const indicatorDefaultExePath = join(PACKAGE_ROOT, 'native', 'indicator-helper', 'build', 'dsh-interaction-indicator.exe');
+  /**
+   * 正式 helper 的安装位置（阶段 1）。
+   *
+   * 源码树带可继承的 Low 完整性标签，从树里启动的 helper 会继承它：钩子装得上、输入收不到，
+   * 表现就是"只有待机和移动"。所以解析顺序是：
+   *   1. 配置里显式写的 `exePath`（最高优先级，便于注入测试用 helper）；
+   *   2. **已部署的安装位置** `%LOCALAPPDATA%\dsh-computer-use\helper`（tools/deploy-helper.ps1 的输出）；
+   *   3. 包内 `native/indicator-helper/build`（开发模式，会在 doctor 里明确标成 development）。
+   * 只在第 3 种情况下才可能是"部署在受限树里"，doctor 的 INDICATOR_INTEGRITY_TOO_LOW 会把这件事说清楚。
+   */
+  const indicatorInstalledExePath = join(
+    process.env.LOCALAPPDATA ?? join(homedir(), 'AppData', 'Local'),
+    'dsh-computer-use',
+    'helper',
+    'dsh-interaction-indicator.exe',
+  );
+  const indicatorExplicitExePath = typeof indicatorOptions.exePath === 'string' && indicatorOptions.exePath.trim() !== ''
+    ? indicatorOptions.exePath
+    : '';
+  const indicatorExePath = indicatorExplicitExePath !== ''
+    ? indicatorExplicitExePath
+    : (existsSync(indicatorInstalledExePath) ? indicatorInstalledExePath : indicatorDefaultExePath);
+  /** helper 来自哪一层：`explicit` / `installed` / `development`。doctor 用它区分部署与开发运行。 */
+  const indicatorExeSource = indicatorExplicitExePath !== ''
+    ? 'explicit'
+    : (indicatorExePath === indicatorInstalledExePath ? 'installed' : 'development');
+  let indicator = null;
+  /** 最近一次 scope 的首帧耗时（scope 结束后仍保留，供 status/doctor 事后查看）。 */
+  let lastFirstPresentMs = null;
+  /** 最近一次问到的角色健康度（surface / frames）。 */
+  let lastCharacterHealth = null;
+  /** 最近一次日常伴随的回执（设置面板与 doctor 用它回答"角色到底显示了没有"）。 */
+  let lastCompanion = null;
+  let cancelCompanionStartup = () => {};
+  /** 物理 Esc 之后的通知闩锁：不清掉它，新的派发一律被拒（见 assertAdmissible）。 */
+  let emergencyLatch = null;
+  let indicatorScope = null;
+  let indicatorScopeTimer = null;
+  /** helper 崩溃后的准入关闭标记：恢复只恢复可用性，不解除用户的取消（方案 4.15.3）。 */
+  let indicatorFault = null;
+
+  /** 截图期间的视觉排除（引用计数 + 代次核对 + finally 恢复）。 */
+  const captureExclusion = createCaptureExclusion({
+    suspend: async () => {
+      const supervisor = indicator;
+      if (supervisor === null || supervisor.state !== 'active') return;
+      await supervisor.suspendVisual();
+    },
+    resume: async () => {
+      const supervisor = indicator;
+      if (supervisor === null) return;
+      await supervisor.resumeVisual();
+    },
+    trace: (name, detail) => ctx.logger?.info?.('computer-use: %s %o', name, detail ?? {}),
+  });
+
+  /** 懒启动：没启用或没构建就返回 null，不阻塞任何工具。
+   *
+   * 两种准入（方案 3.5）：
+   *   - 电脑控制：`interactionIndicator.enabled` 才起 helper（默认路径）；
+   *   - 日常伴随：用户打开 `cursorCompanion` 就起 helper —— 只画鼠标角色，不建 scope、不申请权限。
+   */
+  function companionRequested() {
+    try {
+      return visualPreferences.current.values.cursorCompanion === true;
+    } catch {
+      return false;
+    }
+  }
+
+  function ensureIndicator(options = {}) {
+    const allowCompanion = options.companion === true;
+    if (!indicatorEnabled && !(allowCompanion && companionRequested())) return null;
+    if (indicator === null) {
+      indicator = new IndicatorSupervisor({
+        exePath: indicatorExePath,
+        // 角色图集在包内；不传这一项，helper 就算画得出横幅也不会画角色（--assets= 是唯一开关）。
+        assetsDir: existsSync(join(PACKAGE_ROOT, 'assets', 'character', 'pack.json'))
+          ? join(PACKAGE_ROOT, 'assets', 'character')
+          : '',
+        spawn: indicatorOptions.spawn,
+        onCancelRequested: (payload) => { void emergencyStop(payload); },
+        onFault: (detail) => { void indicatorFaulted(detail); },
+        trace: (name, detail) => ctx.logger?.info?.('computer-use: %s %o', name, detail ?? {}),
+      });
+    }
+    return indicator;
+  }
+
+  /**
+   * 把日常伴随开关推给 helper（方案 3.5 / 7.1）。
+   *
+   * 回执里的 `effectiveVisible` 才是"角色现在真的在鼠标旁"的答案；`requestedEnabled` 是用户的选择。
+   * 失败只记日志：伴随是装饰，坏了不该拦住任何工具。
+   *
+   * @param reason - `startup` | `settings` | `resume`（只用于日志与诊断）。
+   */
+  async function applyCompanionPreferences(reason) {
+    cancelCompanionStartup();
+    const supervisor = ensureIndicator({ companion: true });
+    if (supervisor === null) return { ok: false, reason: 'the overlay helper is not enabled' };
+    try {
+      const current = visualPreferences.current;
+      const applied = await supervisor.setCompanionPreferences({
+        enabled: companionRequested(),
+        hostInstanceId: instanceId,
+        settingsRevision: current.revision,
+        helperGeneration: supervisor.generation,
+      });
+      lastCompanion = { at: Date.now(), reason, ...applied };
+      return { ok: true, applied };
+    } catch (error) {
+      lastCompanion = { at: Date.now(), reason, error: String(error?.message ?? error), effectiveVisible: false };
+      ctx.logger?.warn?.('computer-use: the cursor companion could not be applied: %s', String(error?.message ?? error));
+      return { ok: false, error };
+    }
+  }
+
+  /**
+   * 派发前确保覆盖层就绪（方案 4.15.2 的派发顺序：取资源 → 准备驱动与覆盖层 → 等 scopeReady →
+   * **再次**核验授权/租约/epoch/取消 → 驱动准入）。
+   *
+   * helper 没构建（`unavailable`）时返回 `{ ok: false, degraded: true }`，调用方继续 —— 覆盖层是
+   * 提示能力，缺它不该让整个电脑操作瘫痪；但"构建了却说自己没就绪"是另一回事，那种情况必须拒绝。
+   *
+   * @param sessionId - 会话标识。
+   * @param epoch - 当前授权代次。
+   */
+  async function ensureIndicatorScope(sessionId, epoch) {
+    const supervisor = ensureIndicator();
+    if (supervisor === null) return { ok: true, skipped: true };
+    // 上一次崩溃之后还没恢复：先试着起回来；失败就拒绝这次写（"无法确认覆盖层可见时暂停新的交互写入"）。
+    if (indicatorFault !== null || supervisor.state === 'faulted') {
+      try {
+        await supervisor.start();
+        indicatorFault = null;
+      } catch (error) {
+        return { ok: false, error };
+      }
+    }
+    const scopeId = `${sessionKey(sessionId)}#${epoch}`;
+    if (indicatorScope !== null && indicatorScope.scopeId === scopeId) return { ok: true, reused: true };
+    try {
+      const ready = await supervisor.beginScope({ scopeId, epoch });
+      indicatorScope = { scopeId, at: Date.now(), firstPresentMs: Number.isFinite(ready?.firstPresentMs) ? ready.firstPresentMs : null };
+      // 另记一份在 scope 之外：scope 关掉之后 firstPresentMs 仍可查 —— "首帧多久"恰恰是事后最想知道的数字。
+      if (Number.isFinite(ready?.firstPresentMs)) lastFirstPresentMs = ready.firstPresentMs;
+      // 角色的健康度只在 `health` 里报；开 scope 后顺手问一次，这样 status 能回答
+      // "角色到底加载了没有" —— 没有它，`characterSurface: degraded` 这种"开关开着但什么都没画"
+      // 只能靠猜。
+      try {
+        const health = await supervisor.health();
+        if (health !== null && health !== undefined) {
+          lastCharacterHealth = {
+            surface: String(health.characterSurface ?? 'unknown'),
+            frames: Number.isFinite(health.characterFrames) ? health.characterFrames : null,
+            // 复核结论第 3 条：钩子装上了但系统不投递（工作区树内启动就是）时，
+            // helper 会报 hookSilent。把它带进状态里，用户与 doctor 才看得到"输入被静默吞掉"。
+            hookSilent: health.hookSilent === true,
+            hookSilentMs: Number.isFinite(health.hookSilentMs) ? health.hookSilentMs : null,
+            // 阶段 1/2/3：投递状态、身份、反馈账。doctor 与 /status 都要能分开看到这四件事，
+            // 否则"只有待机和移动"只能靠猜。
+            deliveryState: typeof health.deliveryState === 'string' ? health.deliveryState : null,
+            hookReinstalls: Number.isFinite(health.hookReinstalls) ? health.hookReinstalls : null,
+            escapeReady: health.escapeReady === true,
+            feedbackCreated: Number.isFinite(health.feedbackCreated) ? health.feedbackCreated : null,
+            feedbackPresented: Number.isFinite(health.feedbackPresented) ? health.feedbackPresented : null,
+            feedbackDropReason: typeof health.feedbackDropReason === 'string' ? health.feedbackDropReason : null,
+            activityApplied: Number.isFinite(health.activityApplied) ? health.activityApplied : null,
+            integrityName: typeof health.integrityName === 'string' ? health.integrityName : null,
+          };
+        }
+      } catch {
+        /* 健康度查不到不影响派发 */
+      }
+      // 每次开 scope 都把当前偏好推过去：helper 重启后不会沿用上一代的旧设置。
+      const current = visualPreferences.current;
+      try {
+        await supervisor.setVisualPreferences(current.values, current.revision);
+      } catch (error) {
+        ctx.logger?.warn?.('computer-use: the visual preferences could not be applied to the overlay: %s', String(error?.message ?? error));
+      }
+      // 控制期间也要把伴随开关报给 helper：它决定 scope 结束后是不是继续留着鼠标角色。
+      void applyCompanionPreferences('resume');
+      return { ok: true, ready };
+    } catch (error) {
+      if (supervisor.state === 'unavailable') return { ok: true, skipped: true, degraded: 'the overlay helper is not built' };
+      return { ok: false, error };
+    }
+  }
+
+  /** 没有在飞调用时收掉 scope（延迟一点，避免一串连续调用反复开关窗口）。 */
+  function scheduleScopeEnd() {
+    if (indicatorScope === null) return;
+    if (indicatorScopeTimer !== null) clearTimeout(indicatorScopeTimer);
+    indicatorScopeTimer = setTimeout(() => {
+      indicatorScopeTimer = null;
+      if (execution.count('') > 0) return;
+      const supervisor = indicator;
+      indicatorScope = null;
+      if (supervisor !== null) void supervisor.endScope();
+    }, 400);
+    indicatorScopeTimer.unref?.();
+  }
+
+  /**
+   * 宿主启动：上次开着的日常伴随自动恢复；让出最初 2 秒给宿主装配，避免图集解码争抢资源。
+   * 不依赖第一条工具调用；用户主动操作或设置仍立即执行。这里只起视觉 helper 并推一次伴随开关；
+   * 不建 TaskScope、不申请电脑操作权限、不启动 UIA/PowerShell/CDP worker。
+   */
+  if (companionRequested()) {
+    cancelCompanionStartup = deferStartupWork(() => {
+      // The user may have switched it off while the shell was still opening.
+      if (companionRequested()) return applyCompanionPreferences('startup');
+    });
+    ctx.effect(() => cancelCompanionStartup, 'computer-use: deferred companion startup');
+  }
+
+  /**
+   * 物理 Esc：紧急停止（方案 4.16.2）。
+   *
+   * 顺序：先置闩锁（之后任何派发都被拒），再中止所有在飞调用，最后请求独立释放并让 worker 停到
+   * 下一个步骤边界。不用 `revokeSession`：Esc 不是"用户关了能力"，它是"这一刻停手"，会话授权
+   * 保持不变；闩锁只能由用户明确恢复（关掉再打开 电脑操作）清除。
+   *
+   * @param payload - helper 发来的 `cancelRequested`。
+   */
+  async function emergencyStop(payload) {
+    const reason = 'the user pressed Esc';
+    // 方案 4.9 的两个 trace 字段：闩锁时刻，以及"从取消到准入关闭"的耗时。
+    // 后者应当接近 0 —— 闩锁是在这里同步置上的，先于任何 await。
+    const cancelledAt = Date.now();
+    emergencyLatch = { at: cancelledAt, scopeId: String(payload?.scopeId ?? ''), reason, cancelToAdmissionClosedMs: Date.now() - cancelledAt };
+    ctx.logger?.warn?.('computer-use: physical Esc — closing admission for every computer interaction and stopping in-flight calls');
+    const cancelled = execution.abortAll(reason);
+    if (indicator !== null) {
+      const supervisor = indicator;
+      indicatorScope = null;
+      void supervisor.updateState({ active: false });
+    }
+    try {
+      const target = await ensureBackend();
+      await target.request('release', {}, { timeoutMs: 5000 });
+      target.cancelAll(reason);
+    } catch (error) {
+      ctx.logger?.warn?.('computer-use: releasing held input after Esc failed: %s', String(error?.message ?? error));
+    }
+    return { cancelled };
+  }
+
+  /**
+   * helper 崩了（不是 Esc、也不是正常停止）。
+   *
+   * 方案 4.15.3：崩溃时关闭新的交互准入，并请求当前参与驱动停止；恢复只恢复"可用性"，
+   * **不**解除用户已经做出的取消，也不自动重放任何结果未知的动作。
+   *
+   * @param detail - { generation, code, signal }。
+   */
+  async function indicatorFaulted(detail) {
+    indicatorFault = { at: Date.now(), code: detail?.code ?? null, signal: detail?.signal ?? null, generation: detail?.generation ?? null };
+    ctx.logger?.warn?.('computer-use: the interaction indicator died (code %s); closing admission for new writes', String(indicatorFault.code));
+    execution.abortAll('the interaction indicator stopped');
+    try {
+      const target = await ensureBackend();
+      await target.request('release', {}, { timeoutMs: 5000 });
+      target.cancelAll('the interaction indicator stopped');
+    } catch {
+      /* the backend may never have started; nothing to release */
+    }
+    // 恢复只恢复可用性：**不在故障回调里重启**。helper 一启动就崩时，"崩溃→重启→再崩溃"会变成
+    // 一个自我驱动的循环（测试里一次写操作触发了 45 次 release）。改由**下一次派发**去尝试重启：
+    // 那次失败会被如实拒绝，成功才继续 —— 与"不自动重放未知写操作"是同一条原则。
+    indicatorScope = null;
+    ctx.logger?.info?.('computer-use: the interaction indicator is marked faulted; the next write will try to restart it once');
+  }
+
+  /** 用户的明确恢复动作（关掉 电脑操作）解除 Esc 闩锁。 */
+  function clearEmergencyLatch() {
+    if (emergencyLatch === null) return;
+    emergencyLatch = null;
+    ctx.logger?.info?.('computer-use: the Esc latch was cleared by the user turning 电脑操作 off');
+  }
+
   /** 截图服务（规范化 / 命名 / 去重入库 / 信封）：见 internal/capture.mjs。 */
   const captureService = createCaptureService({ sessionKey });
 
@@ -686,6 +1042,7 @@ export function apply(ctx, config = {}) {
    */
   const TRACE_LIMIT = 100;
   const trace = [];
+  const callCadence = createCallCadence({ limit: TRACE_LIMIT });
   let spanSeq = 0;
   const metrics = {
     toolCalls: 0,
@@ -803,7 +1160,8 @@ export function apply(ctx, config = {}) {
       record.returnedChars = returnedChars;
       metrics.returnedChars = Number(metrics.returnedChars ?? 0) + returnedChars;
     }
-    // One call is one round trip through the model's turn, whatever it did.
+    // Legacy field: completed plugin tool calls, NOT actual model requests. Several
+    // tools may share a host/model turn; the plugin cannot measure those turns.
     metrics.modelRoundTrips = Number(metrics.modelRoundTrips ?? 0) + 1;
     noteCapabilityFromWaits(record, value);
     pushSpan(record);
@@ -833,13 +1191,17 @@ export function apply(ctx, config = {}) {
     return {
       ...definition,
       async execute(args, exec) {
+        const cadence = callCadence.begin(exec?.agent?.session?.id);
         const record = beginSpan(definition.name, args, exec);
+        Object.assign(record, cadence.observation);
         try {
           const value = await original.call(this, args, exec);
           return endSpan(record, value);
         } catch (error) {
           failSpan(record, error);
           throw error;
+        } finally {
+          cadence.finish();
         }
       },
     };
@@ -939,6 +1301,8 @@ export function apply(ctx, config = {}) {
         alive: instance.alive,
         outstanding: instance.outstanding,
         transport: instance.stats ?? null,
+        // 方案 4.19.3：被安全软件拦下的诊断跟着 backend 一起报，字段与错误里的一致。
+        securityBlock: instance.lastSecurityBlock ?? null,
       });
     return {
       metrics: {
@@ -967,7 +1331,7 @@ export function apply(ctx, config = {}) {
       // which release identity the files on disk actually form. These are the answers that used
       // to require guessing from a startup failure.
       instance: describeInstance(instance),
-      release: summarizeRelease(release),
+      release: summarizeRelease(releaseCheck.current),
       host,
       // 装配期的失败：被宿主拒绝的工具描述符（工具名 + 原话），以及 schema 可见性这条链现在
       // 有多少个活 agent 可对齐。两者都为"芯片亮着、工具却没有"这种症状留了可读的原因——
@@ -1218,6 +1582,97 @@ export function apply(ctx, config = {}) {
   let readBackend = null;
 
   /**
+   * 后端命令 → 角色动作类别（阶段 4 第 2 条）。
+   *
+   * 这里只回答"用户看得到哪一类动作"，不回答成败。UIA 的 `uiact` 用 `args.action` 细分：
+   * `invoke` 与 `set_value` 在视觉上是两件事，`set_value` 更像打字而不是点击。
+   * `batch` 取**第一步**的类别：整批一个动作正是阶段 4 第 4 条要避免的粗粒度，但比整批不上报要好；
+   * 每一步的细化留到 worker 逐步回执之后。
+   *
+   * @param cmd - 后端命令名。
+   * @param args - 该命令的参数。
+   * @returns 动作类别，或空串（不需要视觉反馈的读命令）。
+   */
+  function activityKindFor(cmd, args) {
+    const action = String(args?.action ?? '').toLowerCase();
+    switch (cmd) {
+      case 'click':
+      case 'double_click':
+      case 'right_click':
+      case 'middle_click':
+        return 'pointer_click';
+      case 'drag':
+        return 'pointer_drag';
+      case 'scroll':
+        return 'scroll';
+      case 'type':
+      case 'key':
+      case 'paste':
+        return 'type';
+      case 'uiact':
+        if (action === 'set_value') return 'set_value';
+        if (action === 'type' || action === 'select_text') return 'type';
+        return 'invoke';
+      case 'batch': {
+        const step = Array.isArray(args?.steps) && args.steps.length > 0 ? args.steps[0] : null;
+        if (step === null) return 'invoke';
+        return activityKindFor(String(step?.action ?? '').toLowerCase(), step);
+      }
+      default:
+        return '';
+    }
+  }
+
+  /**
+   * 浏览器（CDP）步骤 → 角色动作类别（阶段 4 第 6 条）。
+   *
+   * CDP 的 `Input.dispatchMouseEvent` / `Input.insertText` 不会产生系统低级鼠标钩子事件，
+   * 所以视觉只能靠活动消息驱动：这里给出类别，主流程负责发 start/end。
+   * `navigate` / `state` / `wait_for` 这类没有"手上动作"的步骤不上报。
+   *
+   * @param step - `runActions` 的单步描述。
+   * @returns 动作类别，或空串。
+   */
+  function browserActivityKind(step) {
+    switch (String(step?.action ?? '').toLowerCase()) {
+      case 'click':
+        return 'pointer_click';
+      case 'type':
+      case 'fill':
+      case 'press':
+        return 'type';
+      case 'scroll':
+        return 'scroll';
+      default:
+        return '';
+    }
+  }
+
+  /**
+   * 把一条活动发给覆盖层（阶段 4 第 1/3/7 条）。
+   *
+   * 三条约束：只在真正派发之后发；**不 await、不抛**（视觉慢一秒不能拖住真实操作）；
+   * helper 不支持活动通道时什么都不发，并在 supervisor 里记 `activityDropped`。
+   *
+   * @param kind - 动作类别。
+   * @param phase - `start` | `end` | `failed` | `cancelled`。
+   * @param detail - `{ epoch }`（用于旧代次过滤）。
+   */
+  function noteActivity(kind, phase, detail = {}) {
+    const supervisor = indicator;
+    if (supervisor === null || kind === '') return;
+    if (supervisor.supportsActivity !== true) return;
+    void supervisor.activity({
+      kind,
+      phase,
+      source: detail.source ?? 'tool',
+      operationId: detail.operationId,
+      epoch: Number.isFinite(detail.epoch) ? detail.epoch : undefined,
+    });
+  }
+
+
+  /**
    * The worker that serves the isolated read commands. Started on first use, kept for the
    * life of the plugin, and verified against the same protocol/build contract as the main
    * one: two processes that disagree about the wire are worse than one.
@@ -1291,8 +1746,12 @@ export function apply(ctx, config = {}) {
       if (fields === undefined) return;
       // 只给 path 的拖拽是合法的（worker 接受 waypoint 列表）——别把这条路挡掉。
       if (command === 'drag' && Array.isArray(target?.path) && target.path.length > 0) return;
+      // 接着画（`fromLast` / `continueFrom`）时起点来自上一次的句柄，本来就不该有 fromX/fromY。
+      // 以前这里会把它们当"缺坐标"拒掉，于是"用句柄接着画"这条能力在插件层根本走不到 worker。
+      const continuation = command === 'drag' && (target?.fromLast === true || (typeof target?.continueFrom === 'string' && target.continueFrom !== ''));
       const required = COORDINATES_REQUIRED.has(command);
       for (const field of fields) {
+        if (continuation && (field === 'fromX' || field === 'fromY')) continue;
         const value = target?.[field];
         const missing = value === undefined || value === null;
         if (missing && !required) continue;
@@ -1344,6 +1803,31 @@ export function apply(ctx, config = {}) {
    */
   async function call(exec, cmd, args, options = {}) {
     requireGrant(exec);
+    // 派发准入（方案 4.5 / PR07）：在**这一行**记下会话与授权代次，在真正写进驱动之前再比一次。
+    // 中间可能发生的 await（启动 worker、契约检查、interactive 健康检查）正是旧实现被撤权之后
+    // 仍然继续写入的窗口；记录放前面、复核放派发前，中间不留保护缺口。
+    const admission = captureAdmission(sessionKey(exec?.agent?.session?.id), sessions.epoch(sessionKey(exec?.agent?.session?.id)));
+    /** 派发前的最后一次复核；不通过就抛，且此时什么都没写出去。 */
+    const assertAdmissible = () => {
+      // 物理 Esc 的闩锁先于一切：用户按下 Esc 之后，任何新的派发都必须被拒，直到用户明确恢复
+      // （关掉再打开 电脑操作）。模型换一个 sessionId 或 epoch 都不该绕过它（方案 4.16.3）。
+      if (emergencyLatch !== null) {
+        const error = new Error('the last computer interaction was cancelled with Esc, so nothing more will be sent to the desktop until 电脑操作 is turned off and on again');
+        error.code = 'ABORTED';
+        error.delivery = 'not_sent';
+        throw error;
+      }
+      const failure = checkAdmission(admission, {
+        enabled: sessions.isEnabled(sessionKey(exec?.agent?.session?.id)),
+        epoch: sessions.epoch(sessionKey(exec?.agent?.session?.id)),
+        stopping: execution.isStopping(sessionKey(exec?.agent?.session?.id)),
+      });
+      if (failure === null) return;
+      const error = new Error(failure.message);
+      error.code = failure.code;
+      error.delivery = 'not_sent';
+      throw error;
+    };
     // 参数护栏（本仓库自己的检查，不依赖宿主）：两类值在这里就挡掉，因为它们进了 worker 会以两种
     // 都不好看的方式失败——
     //   · `hwnd` 不是数字：worker 的 `[int]` 转换会抛 PowerShell 原生错误（"无法将值…转换为类型
@@ -1382,10 +1866,37 @@ export function apply(ctx, config = {}) {
       const writing = movesDesktop(cmd, args);
       if (writing) beginWrite();
       try {
-        return await instance.request(cmd, args, {
-          timeoutMs: options.timeoutMs ?? actionTimeoutMs,
-          signal,
-        });
+        // 方案 4.15.2 的派发顺序：先让覆盖层就绪（scopeReady 的两个 ready 都为真），**再**复核
+        // 授权/租约/epoch/取消，最后才写进驱动。等待首帧期间按 Esc 或撤权，都会让下一行拒绝派发。
+        if (writing && indicatorEnabled) {
+          const overlay = await ensureIndicatorScope(exec?.agent?.session?.id, sessions.epoch(sessionKey(exec?.agent?.session?.id)));
+          if (overlay.ok !== true) {
+            const error = new Error(`the interaction overlay is not ready (` + String(overlay.error?.message ?? 'unknown') + `), so nothing was sent to the desktop`);
+            error.code = 'OVERLAY_NOT_READY';
+            error.delivery = 'not_sent';
+            throw error;
+          }
+          // 等待之后必须再次复核：这中间可能被撤权、被停止，或用户按了 Esc。
+          assertAdmissible();
+        }
+        // 最后复核与派发之间不允许插入 await：这一行之前的一切都已经等完了（启动、契约、健康检查）。
+        assertAdmissible();
+        // 阶段 4：动作的视觉语义只在这里发——已经通过准入、正要真的派发。
+        // 发完不等待：动画消息超时不能拖慢真实操作，也不能把"动画播了"当成"操作成功"。
+        const activityKind = writing ? activityKindFor(cmd, args) : '';
+        if (activityKind !== '') noteActivity(activityKind, 'start', { epoch: admission.epoch });
+        try {
+          const result = await instance.request(cmd, args, {
+            timeoutMs: options.timeoutMs ?? actionTimeoutMs,
+            signal,
+            sessionKey: sessionKey(exec?.agent?.session?.id),
+          });
+          if (activityKind !== '') noteActivity(activityKind, 'end', { epoch: admission.epoch });
+          return result;
+        } catch (activityFailure) {
+          if (activityKind !== '') noteActivity(activityKind, 'failed', { epoch: admission.epoch });
+          throw activityFailure;
+        }
       } catch (failure) {
         // A read may be repeated for free; a write may not (方案 §6.4). When the failure was a
         // timeout the transport has already dropped the worker, so the retry runs in a fresh
@@ -1394,22 +1905,41 @@ export function apply(ctx, config = {}) {
         if (options.retryRead !== false && isIdempotentCall(cmd, args) && mayRetryRead(failure)) {
           metrics.readRetries += 1;
           const retried = await pickBackend();
+          // 重试也消费原许可：撤权之后不因为"只是想再读一次"而多写一次。
+          assertAdmissible();
           return await retried.request(cmd, args, {
             timeoutMs: options.timeoutMs ?? actionTimeoutMs,
             signal,
+            sessionKey: sessionKey(exec?.agent?.session?.id),
           });
         }
         throw failure;
       } finally {
         // The idle window starts *now*, not when the call was accepted: "quiet for N seconds"
         // has to mean the desktop has been quiet for N seconds.
-        if (writing) finishWrite();
+        if (writing) {
+          finishWrite();
+          // 没有在飞调用时收掉覆盖层（延迟一点，连续调用不会反复开关窗口）。
+          scheduleScopeEnd();
+        }
       }
     } catch (error) {
       // The retry guidance depends on whether this call could have happened: a read can
       // be repeated for free, a click cannot.
       const context = { idempotent: isIdempotentCall(cmd, args) };
-      throw new Error(withOutcomeNote(decorateFailure(backendMessage(error), context), error, cmd, args));
+      const rethrown = new Error(withOutcomeNote(decorateFailure(backendMessage(error), context), error, cmd, args));
+      // 方案 4.3 / PR05：旧工具的输出 schema 不变，但"这次到底派发了没有"必须能被诊断读到 ——
+      // 回执以非枚举属性挂在抛出的错误上，不进入任何工具返回值。
+      if (error !== null && typeof error === 'object' && error.receipt !== undefined) {
+        try {
+          Object.defineProperty(rethrown, 'receipt', { value: error.receipt, enumerable: false, configurable: true });
+          rethrown.delivery = error.receipt.delivery;
+          rethrown.recovery = error.receipt.recovery;
+        } catch {
+          /* a frozen error keeps its message */
+        }
+      }
+      throw rethrown;
     } finally {
       untrack();
     }
@@ -1434,6 +1964,8 @@ export function apply(ctx, config = {}) {
   async function revokeSession(sessionId, reason = 'the capability was turned off') {
     const key = sessionKey(sessionId);
     sessions.revoke(key);
+    // 用户的明确动作：关掉 电脑操作 也解除 Esc 闩锁（这是唯一允许清除它的入口）。
+    clearEmergencyLatch();
     execution.beginStop(key);
     let cancelled = execution.abort(key, reason);
     // The browser channel belongs to the session as well: aborting its calls above stops the
@@ -1444,7 +1976,9 @@ export function apply(ctx, config = {}) {
     let error = '';
     try {
       const instance = await ensureBackend();
-      cancelled += instance.cancelAll(reason);
+      // 方案 4.5 / PR07：只取消**这个会话**的请求。旧实现调 `cancelAll`，于是一个宿主里两个会话
+      // 同时用电脑时，关掉 A 会把 B 正在跑的调用一起打断，而 B 的解释里没有任何线索。
+      cancelled += instance.cancelSession(key, reason);
       // Give the worker a moment to unwind the step it is in: a release that arrives
       // while a drag is mid-move would be undone by the drag's own finally block.
       const deadline = Date.now() + 800;
@@ -1482,22 +2016,30 @@ export function apply(ctx, config = {}) {
     // different problems (a slow GDI/PrintWindow path vs. an oversized image crossing the
     // attachment layer), and without the split the only visible number is the whole call.
     const started = Date.now();
-    const shot = await call(exec, 'screenshot', {
-      path: shotPath,
-      window: options.window,
-      requireWindow: options.requireWindow,
-      display: options.display,
-      region: options.region,
-      regionSpace: options.regionSpace,
-      surface: options.surface,
-      clip: options.clip === true,
-      scale: options.scale,
-      format,
-      quality: options.quality,
-      settleMs: options.settleMs,
-      stabilityMs: options.stabilityMs,
-      stable: options.stable,
-    }, { timeoutMs: Math.max(actionTimeoutMs, 25_000) });
+    // 方案 4.17.1：优先用系统排除（helper 窗口已设 `WDA_EXCLUDEFROMCAPTURE`）；对不认它的后端，
+    // 捕获期间把像素真的收起来，**finally** 一定放回去，并发捕获由引用计数协调。
+    const exclusionToken = await captureExclusion.begin(indicator?.visualGeneration ?? null);
+    let shot;
+    try {
+      shot = await call(exec, 'screenshot', {
+        path: shotPath,
+        window: options.window,
+        requireWindow: options.requireWindow,
+        display: options.display,
+        region: options.region,
+        regionSpace: options.regionSpace,
+        surface: options.surface,
+        clip: options.clip === true,
+        scale: options.scale,
+        format,
+        quality: options.quality,
+        settleMs: options.settleMs,
+        stabilityMs: options.stabilityMs,
+        stable: options.stable,
+      }, { timeoutMs: Math.max(actionTimeoutMs, 25_000) });
+    } finally {
+      await captureExclusion.end(exclusionToken);
+    }
     // How long this call sat in the transport queue before the worker got it. That time is
     // part of the call's wall time and none of the capture's own time: without it, a capture
     // that waited five seconds behind another call looks like a slow capture.
@@ -1742,6 +2284,7 @@ export function apply(ctx, config = {}) {
    * @returns the BrowserSession.
    */
   async function browserSessionFor(sessionKey, endpoint) {
+    const { CdpConnection, BrowserSession } = await loadBrowserRuntime();
     const key = `${sessionKey}|${endpoint}`;
     const existing = browserSessions.get(key);
     if (existing !== undefined && existing.connection.connected) return existing;
@@ -1843,6 +2386,7 @@ export function apply(ctx, config = {}) {
       if (base.view === 'dom') {
         return { ...base, status: 'ok', truncated: false, refs: 0, snapshots: 0, note: 'the DOM outline is not opened yet: the accessibility view is the one that carries references. Read `view: ax` or `view: text`.' };
       }
+      const { BrowserSession } = await loadBrowserRuntime();
       let browser;
       try {
         browser = await browserSessionFor(sessionKey, endpoint);
@@ -1956,30 +2500,17 @@ export function apply(ctx, config = {}) {
   safeRegister(defineTracedTool({
     name: 'browser_actions',
     description:
-      "Do things on a page through the browser's own protocol: navigate, put a value in a field, click a reference from browser_state, and end with a state read — all in one call, because a browser task is a sequence rather than one action per round trip. Every step spends the same call budget, a write is sent exactly once (a click that was dispatched and then lost is reported as `actionSent: true` and `outcome: 'unknown'`, never replayed), and a step that asked to be verified is read back before this call says it worked. Requires 电脑操作.",
+      "Execute a short group of known page actions in one call. Plan the next milestone, batch actions whose targets are already known, and set `state: true` to observe the result in the SAME call. Prefer local `wait_for` conditions over repeated model calls to poll the page. Stop the batch before a navigation or unknown UI change requires new references; inspect the result before planning the next group. All steps share one budget. Writes are sent once; `actionSent: true` with `outcome: 'unknown'` must not be blindly replayed. Explicitly requested verification is read back. Requires 电脑操作.",
     parameters: {
       steps: {
         type: 'array',
         required: true,
         description: `The steps, in order (maximum 20). Actions: ${BROWSER_ACTIONS.join(', ')}.`,
-        items: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            action: { type: 'string', required: true, enum: [...BROWSER_ACTIONS] },
-            url: { type: 'string', description: 'navigate: where to go.' },
-            ref: { type: 'string', description: 'click/fill: a reference from browser_state, checked against the connection, target, frame and document it was read from before it is used.' },
-            value: { type: 'string', description: "fill: the text to put in the field, through the page's own input/change events so frameworks notice." },
-            verify: { type: 'object', additionalProperties: true, description: 'click: what to look for afterwards (`{name: "…"}`). Without it the step is reported as `not_verified` rather than implied to have worked.' },
-            filter: { type: 'string', description: 'state: substring over role, name and value.' },
-            max_nodes: { type: 'integer', description: 'state: node budget (default 200, maximum 1000).' },
-            max_chars: { type: 'integer', description: 'state: character budget.' },
-          },
-        },
+        items: browserStepParameterSchema(),
       },
       tab: { type: 'string', description: 'Which page: a target id from browser_state or its 1-based position.' },
       timeout_ms: { type: 'integer', description: 'The budget for the whole call, shared by every step (default 15000, maximum 60000) — one deadline rather than one per step.' },
-      state: { type: 'boolean', description: 'End the call with an accessibility read of the page, so one round trip returns what your steps did.' },
+      state: { type: 'boolean', description: 'Set true to return the resulting page state in this call; omitted means no trailing read. Prefer true at a decision boundary, avoiding a separate browser_state call.' },
     },
     output: {
       schema: {
@@ -2004,6 +2535,7 @@ export function apply(ctx, config = {}) {
           returned: { type: 'integer' },
           status: { type: 'string' },
           note: { type: 'string' },
+          verifyMs: { type: 'integer', description: '验证阶段的耗时（只算验证性读取，不含派发本身，见方案 4.9）。' },
         },
       },
       render: (_args, value) => {
@@ -2026,23 +2558,18 @@ export function apply(ctx, config = {}) {
     },
     async execute(args, exec) {
       requireGrant(exec);
+      // 输入契约（方案 4.2 / PR02）：整批在校验完之前不建立任何连接、不写任何通道。未知动作、
+      // 缺字段、错类型、越界值都以既有的 BAD_REQUEST 失败；合法输入按 action 判别后原样到达
+      // 处理器。字段清单与处理器消费的字段同源于 internal/actions/catalog.mjs。
+      const steps = validateBrowserSteps(args.steps);
       const sessionKey = String(exec?.agent?.session?.id ?? '');
       const endpoint = resolveBrowserEndpoint(sessionKey);
-      const steps = Array.isArray(args.steps) ? args.steps : [];
       const base = { path: 'cdp', browser: { endpoint, generation: 0 }, performed: [], verification: [], failedAt: -1, actionSent: false, outcome: 'completed', nextStep: 0, elapsedMs: 0, budgetMs: clampActionBudget(args.timeout_ms), truncated: false };
       if (!BROWSER_CAPABLE) return { ...base, outcome: 'failed', status: 'capability_unavailable', note: BROWSER_CAPABILITY_NOTE };
       if (endpoint === '') {
         return { ...base, outcome: 'failed', status: 'unavailable', note: 'no browser endpoint is configured. Set `browserEndpoint` (e.g. http://127.0.0.1:9222) to a browser started with --remote-debugging-port.' };
       }
-      if (steps.length === 0) throw new Error('[BAD_REQUEST] browser_actions needs at least one step.');
-      if (steps.length > 20) throw new Error(`[BAD_REQUEST] browser_actions accepts at most 20 steps per call (got ${steps.length}).`);
-      steps.forEach((step, index) => {
-        const action = String(step?.action ?? '').toLowerCase();
-        if (!BROWSER_ACTIONS.includes(action)) throw new Error(`[BAD_REQUEST] step ${index} has unknown action "${step?.action ?? ''}" (this build understands: ${BROWSER_ACTIONS.join(', ')}).`);
-        if (action === 'navigate' && (typeof step.url !== 'string' || step.url === '')) throw new Error(`[BAD_REQUEST] step ${index} is a navigate without a url.`);
-        if (action === 'click' && (typeof step.ref !== 'string' || step.ref === '')) throw new Error(`[BAD_REQUEST] step ${index} is a click without a ref; read the page with browser_state first.`);
-        if (action === 'fill' && (typeof step.ref !== 'string' || step.ref === '' || typeof step.value !== 'string')) throw new Error(`[BAD_REQUEST] step ${index} is a fill without a ref and a value.`);
-      });
+      const { BrowserSession, runActions } = await loadBrowserRuntime();
       let browser;
       try {
         browser = await browserSessionFor(sessionKey, endpoint);
@@ -2086,7 +2613,18 @@ export function apply(ctx, config = {}) {
           return { ...base, outcome: 'failed', status: 'no_target', note: `no page is bound to this session and none was named. Open tabs: ${tabs.map((one) => `${one.id} "${one.title}"`).join(', ') || '(none)'}. Pass one as \`tab\`.` };
         }
         base.tab = { id: target.id, title: target.title, url: target.url, bound: true };
-        const receipt = await execution.runSessionCall(exec, { timeoutMs: clampActionBudget(args.timeout_ms) + 2000, label: 'browser_actions' }, ({ signal }) => runActions(session, { targetId: target.id, steps, timeoutMs: args.timeout_ms, signal }));
+        // 阶段 4 第 6 条：CDP 的点击/输入不会产生系统鼠标边沿，视觉只能由活动消息驱动。
+        // 这里取**第一步**的类别（与桌面 batch 同口径），并把来源标成 cdp，便于诊断区分。
+        const browserKind = browserActivityKind(Array.isArray(steps) ? steps[0] : null);
+        if (browserKind !== '') noteActivity(browserKind, 'start', { source: 'cdp' });
+        let receipt;
+        try {
+          receipt = await execution.runSessionCall(exec, { timeoutMs: clampActionBudget(args.timeout_ms) + 2000, label: 'browser_actions' }, ({ signal }) => runActions(session, { targetId: target.id, steps, timeoutMs: args.timeout_ms, signal }));
+          if (browserKind !== '') noteActivity(browserKind, 'end', { source: 'cdp' });
+        } catch (browserFailure) {
+          if (browserKind !== '') noteActivity(browserKind, 'failed', { source: 'cdp' });
+          throw browserFailure;
+        }
         Object.assign(ran, receipt);
         // Where the call *ended* is what the trailing state should read: `tabs create` moves the
         // call to a new page, and a receipt that reported the old one, plus a state read of it,
@@ -2129,6 +2667,8 @@ export function apply(ctx, config = {}) {
           ...base,
           performed: ran.performed,
           verification: ran.verification,
+          // 验证阶段耗时（方案 4.9 的 verifyMs）：只算验证性读取，不算派发。
+          ...(Number.isFinite(ran.verifyMs) ? { verifyMs: ran.verifyMs } : {}),
           failedAt,
           actionSent: ran.actionSent,
           // An action that was sent stays "unknown" rather than becoming "failed": the caller
@@ -2358,7 +2898,7 @@ export function apply(ctx, config = {}) {
   safeRegister(defineTracedTool({
     name: 'computer_actions',
     description:
-      'Perform several computer actions in ONE call, optionally ending with a screenshot, an accessibility read, or both. Steps: click, type, key, scroll, drag, move, paste, focus, clipboard, and the UI Automation steps. Use it when you already know the next few steps — one call instead of a chain, a round trip saved per step. Steps run in order; if one fails the earlier ones have already happened and the result names the failing index. `evidence` reports whether the screen changed — if it says nothing moved, do not repeat that coordinate. Requires 电脑操作.',
+      'Execute a short group of known desktop actions in ONE call. Plan the next milestone, then group steps such as focusing a known field, typing, and pressing a key; stop where the next target needs a fresh observation. Use `wait_for` for a known condition, and include `state: {}` or `screenshot: true` to observe the result in this SAME call. Prefer one suitable observation; request both only when needed. Inspect the result and adjust the next group, rather than reasoning between every mechanical step. Steps run in order; earlier successful steps remain done if a later one fails. `evidence` reports screen changes; do not blindly repeat unchanged coordinates or uncertain writes. Requires 电脑操作.',
     parameters: {
       steps: {
         type: 'array',
@@ -2368,7 +2908,7 @@ export function apply(ctx, config = {}) {
       },
       screenshot: {
         type: 'boolean',
-        description: 'Capture one screenshot after the last step, in the same round trip. Implied by any `screenshot` step.',
+        description: 'Set true when the next decision needs a visual observation: capture after the steps in this same call instead of calling computer_screenshot separately. Omitted means no trailing capture; implied by a screenshot step.',
       },
       state: {
         type: 'object',
@@ -3034,6 +3574,9 @@ export function apply(ctx, config = {}) {
     },
   }));
 
+  // 每个会话最近一次拖拽的句柄（§8 的"接着画"）：只为在派发前拒绝确定性的错，不参与定位。
+  const dragHandles = new Map();
+
   safeRegister(defineTracedTool({
     name: 'computer_drag',
     description:
@@ -3117,6 +3660,7 @@ export function apply(ctx, config = {}) {
       const hasPath = Array.isArray(args.path) && args.path.length > 0;
       // §8 后半：起点可以来自上一次拖拽的落点，这时四个角点里只有终点是必需的。
       const continueFromLast = args.from_last === true || (typeof args.continue_from === 'string' && args.continue_from !== '');
+
       const corners = ['from_x', 'from_y', 'to_x', 'to_y'];
       if (hasPath) {
         const alsoCorners = corners.filter((name) => args[name] !== undefined);
@@ -3135,6 +3679,18 @@ export function apply(ctx, config = {}) {
         const missing = required.filter((name) => !Number.isFinite(Number(args[name])));
         if (missing.length > 0) {
           throw new Error(`[BAD_REQUEST] computer_drag needs ${missing.join(', ')} — or a \`path\` of waypoints instead.`);
+        }
+      }      // 句柄校验放在**派发之前**：没有句柄却要"接着画"是个确定性错误，没有必要让 worker 先起一次
+      // 桌面调用再失败。`[DRAG_HANDLE_MISSING]` 与 `action_sent=false` 是给调用方的两个明确信号。
+      if (continueFromLast) {
+        const key = String(exec?.agent?.session?.id ?? '');
+        const known = dragHandles.get(key);
+        const asked = typeof args.continue_from === 'string' && args.continue_from !== '' ? args.continue_from : '';
+        if (known === undefined) {
+          throw new Error('[DRAG_HANDLE_MISSING] no drag has been performed in this session yet, so there is nothing to continue from; nothing was sent (action_sent=false). Call computer_drag with from_x/from_y first.');
+        }
+        if (asked !== '' && asked !== known) {
+          throw new Error(`[DRAG_HANDLE_MISSING] ${asked} is not the most recent one (the handle you can continue from is ${known}); nothing was sent (action_sent=false). Handles are short-lived: after a while, or after another drag, the old one is refused rather than guessed.`);
         }
       }
       const result = await call(exec, 'drag', {
@@ -3164,7 +3720,11 @@ export function apply(ctx, config = {}) {
       }
       if (typeof result.modifiers === 'string' && result.modifiers !== '') value.modifiers = result.modifiers;
       // §8 后半：回执把句柄交回调用方，下一次就能用它（或 from_last）接着画。
-      if (typeof result.handle === 'string' && result.handle !== '') value.handle = result.handle;
+      if (typeof result.handle === 'string' && result.handle !== '') {
+        value.handle = result.handle;
+        // 记下来，下一次 rom_last / continue_from 才有的可接（也只接这一个）。
+        dragHandles.set(String(exec?.agent?.session?.id ?? ''), result.handle);
+      }
       if (result.frame !== null && result.frame !== undefined) {
         value.frame = {
           id: String(result.frame.id ?? ''),
@@ -3253,7 +3813,7 @@ export function apply(ctx, config = {}) {
   safeRegister(defineTracedTool({
     name: 'computer_type',
     description:
-      'Type text into whatever currently has keyboard focus, using Unicode input so any language works. Click the target field first. Requires 电脑操作.',
+      'Type text into whatever currently has keyboard focus, using Unicode input so any language works. Focus the target field first. For a known focus/type/key sequence use computer_actions and request a trailing observation, saving model round trips. Requires 电脑操作.',
     parameters: {
       text: { type: 'string', required: true, description: 'The exact text to type. Newlines press Enter.' },
       into_hwnd: { type: 'integer', description: 'Only send if this window (an hwnd from computer_windows) would receive it. A dialog that appeared since the last click is how text ends up in the wrong place; with this set a mismatch is refused before anything is sent.' },
@@ -3279,7 +3839,7 @@ export function apply(ctx, config = {}) {
   safeRegister(defineTracedTool({
     name: 'computer_key',
     description:
-      "Press a key or key chord on the keyboard focus, e.g. 'enter', 'esc', 'tab', 'ctrl+c', 'ctrl+shift+t', 'alt+f4', 'win'. Requires 电脑操作.",
+      "Press a key or key chord on the keyboard focus, e.g. 'enter', 'esc', 'tab', 'ctrl+c', 'ctrl+shift+t', 'alt+f4', 'win'. Prefer computer_actions when this is part of a known sequence, returning an observation at its decision boundary. Requires 电脑操作.",
     parameters: {
       keys: { type: 'string', required: true, description: "Chord with '+' between keys, e.g. 'ctrl+s'. Modifiers come first." },
       into_hwnd: { type: 'integer', description: 'Only send if this window (an hwnd from computer_windows) is the one that would receive it; a mismatch is refused before anything is sent. Same guard as computer_type.' },
@@ -4253,7 +4813,7 @@ export function apply(ctx, config = {}) {
     ok: true,
     plugin: '@local/dsh-computer-use',
     version: VERSION,
-    buildId: release.buildId,
+    buildId: releaseCheck.current.buildId,
     label: LABEL,
     platform: process.platform,
     supported: SUPPORTED,
@@ -4267,6 +4827,25 @@ export function apply(ctx, config = {}) {
     // express "stopping", which is exactly the state a user needs to see after pressing
     // stop on something that is mid-batch.
     control: controlState(sessionId),
+    // 覆盖层的开关状态（方案 4.18）：配置里写没写、helper 起没起、当前有没有 scope。
+    // 这三件事在界面上分别是三处，合成一个字段是为了排障时不用翻三个地方。
+    indicator: {
+      enabled: indicatorEnabled,
+      state: indicator === null ? 'absent' : indicator.state,
+      scope: indicatorScope?.scopeId ?? null,
+      // 首帧耗时（helper 在 `scopeReady` 里报），以及 Esc 闩锁时刻 —— 都是方案 4.9 的关键 trace 字段。
+      firstPresentMs: indicatorScope?.firstPresentMs ?? lastFirstPresentMs,
+      latch: emergencyLatch === null ? null : { at: emergencyLatch.at, scopeId: emergencyLatch.scopeId, cancelToAdmissionClosedMs: emergencyLatch.cancelToAdmissionClosedMs ?? null },
+      // 用的是哪一份 helper、它在不在。`state: unavailable` 时这一行直接说明是"路径错了"还是"没构建"。
+      character: lastCharacterHealth,
+      helper: { path: indicatorExePath, found: existsSync(indicatorExePath), source: indicatorExeSource },
+      // 日常伴随（方案 3.5）：用户的选择 + helper 的实测回执。两者分开写，避免"开关是开的但
+      // 角色没出现"被读成同一种状态。
+      companion: {
+        requested: companionRequested(),
+        applied: lastCompanion,
+      },
+    },
     backend: backend === null
       ? { started: false }
       : { started: true, alive: backend.alive, outstanding: backend.outstanding, dpi: backend.info?.dpi, screens: backend.info?.screens, generation: backend.info?.generation },
@@ -4284,6 +4863,140 @@ export function apply(ctx, config = {}) {
         handler: (req, res) => sendJson(res, 200, { ...statePayload(undefined), runtime: runtimeSummary(), note: 'host half of the 电脑操作 capability is loaded' }),
       }),
       'computer-use: status route',
+    );
+
+    scoped.effect(
+      () => scoped.webServer.register({
+        kind: 'exact',
+        path: `${ROUTE}/action-table`,
+        // 阶段 5：动作表给设置页/诊断页用。单独一条路而不是写进状态里，
+        // 是因为它是**文档**，不是运行时事实；混在一起会让"这张表说了什么"和"现在发生了什么"分不清。
+        handler: (req, res) => sendJson(res, 200, {
+          ok: true,
+          schema: 'dsh.computer-use.action-table/v1',
+          actions: ACTION_TABLE,
+          preview: previewPlan(),
+        }),
+      }),
+      'computer-use: action table route',
+    );
+
+    scoped.effect(
+      () => scoped.webServer.register({
+        kind: 'exact',
+        path: `${ROUTE}/visual-preview`,
+        // 预览只演示动画：走的是与真实工具动作**同一条**活动消息，
+        // 但不派发任何桌面输入，也不申请任何控制权限。
+        handler: async (req, res) => {
+          if (req.method !== 'POST') {
+            sendJson(res, 405, { ok: false, error: 'POST a { "kind": "pointer_click" } to preview an action' });
+            return;
+          }
+          try {
+            const body = await readJsonBody(req);
+            const kind = String(body?.kind ?? '');
+            const plan = previewPlan();
+            if (kind === '' || !plan.some((entry) => entry.kind === kind)) {
+              sendJson(res, 400, { ok: false, error: `unknown preview kind (${kind || 'empty'})`, kinds: plan.map((entry) => entry.kind) });
+              return;
+            }
+            const supervisor = ensureIndicator({ companion: true });
+            if (supervisor === null) {
+              sendJson(res, 409, { ok: false, degraded: true, reason: 'the overlay helper is not enabled' });
+              return;
+            }
+            try {
+              await supervisor.start();
+            } catch (error) {
+              sendJson(res, 409, { ok: false, degraded: true, reason: String(error?.message ?? error) });
+              return;
+            }
+            // helper 在旧版本里没有活动通道：明确说"这一代不支持预览"，不要报成功。
+            if (supervisor.supportsActivity !== true) {
+              sendJson(res, 409, { ok: false, degraded: true, reason: 'this helper build has no visual-activity channel' });
+              return;
+            }
+            const applied = await supervisor.activity({ kind, phase: 'start', source: 'preview' });
+            // 预览是"演示一次"：给一个短的收势，不留下持续的按住状态。
+            setTimeout(() => { void supervisor.activity({ kind, phase: 'end', source: 'preview' }); }, 420).unref?.();
+            sendJson(res, 200, {
+              ok: true,
+              schema: 'dsh.computer-use.visual-preview/v1',
+              kind,
+              applied: applied?.applied === true,
+              feedbackId: applied?.feedbackId ?? null,
+              feedbackClip: applied?.feedbackClip ?? null,
+              // 说清楚这条路的边界：预览不证明真实输入能到、也不证明工具动作真的发生了。
+              note: 'the preview only animates the character; it sends no desktop input and is not evidence that a real action works',
+            });
+          } catch (error) {
+            sendJson(res, 500, { ok: false, error: String(error?.message ?? error) });
+          }
+        },
+      }),
+      'computer-use: visual preview route',
+    );
+
+    scoped.effect(
+      () => scoped.webServer.register({
+        kind: 'exact',
+        path: `${ROUTE}/visual-preferences`,
+        handler: async (req, res) => {
+          try {
+            if (req.method === 'GET') {
+              const state = visualPreferences.current;
+              sendJson(res, 200, {
+                ok: true,
+                schema: 'dsh.computer-use.visual-preferences/v1',
+                values: state.values,
+                defaults: VISUAL_DEFAULTS,
+                settingsRevision: state.revision,
+                updatedAt: state.updatedAt,
+                degraded: state.degraded,
+                // "视觉已应用"不等于"任务已停止"：这里如实分开说。
+                overlay: indicator === null ? { state: 'absent' } : { state: indicator.state, scope: indicatorScope?.scopeId ?? null },
+              });
+              return;
+            }
+            if (req.method === 'POST') {
+              const body = await readJsonBody(req);
+              const patch = body?.values ?? body ?? {};
+              const saved = visualPreferences.save(patch);
+              let applied = null;
+              let applyError = null;
+              if (indicator !== null && (indicator.state === 'active' || indicator.state === 'ready')) {
+                try {
+                  const result = await indicator.setVisualPreferences(saved.values, saved.revision);
+                  applied = { revision: result?.settingsRevision ?? saved.revision, applied: result?.applied === true };
+                } catch (error) {
+                  applyError = String(error?.message ?? error);
+                }
+              }
+              // 伴随开关是独立消息：设置面板一改就推，别等下一次电脑控制（方案 3.5 的"立即生效"）。
+              let companion = null;
+              if (Object.prototype.hasOwnProperty.call(patch, 'cursorCompanion') || companionRequested()) {
+                const result = await applyCompanionPreferences('settings');
+                companion = result?.ok === true ? result.applied : { applied: false, error: String(result?.error ?? result?.reason ?? '') };
+              }
+              sendJson(res, 200, {
+                ok: true,
+                values: saved.values,
+                settingsRevision: saved.revision,
+                rejected: saved.rejected,
+                applied,
+                applyError,
+                companion,
+                note: 'visual settings apply to the overlay only; the Esc cancel path and the operation banner are not affected',
+              });
+              return;
+            }
+            sendJson(res, 405, { ok: false, error: 'use GET or POST' });
+          } catch (error) {
+            sendJson(res, 500, { ok: false, error: error instanceof Error ? error.message : String(error) });
+          }
+        },
+      }),
+      'computer-use: visual preferences route',
     );
 
     scoped.effect(
@@ -4384,14 +5097,52 @@ export function apply(ctx, config = {}) {
       'computer-use: backend probe route',
     );
 
+    // 可选扩展的管家（方案 4.21）。这条路由只说"现在有什么、宿主支持什么"——不提供任何安装/卸载入口，
+    // 因为方案要求管理入口只给用户设置服务，不注册成模型可调用的工具。
+    scoped.effect(
+      () => scoped.webServer.register({
+        kind: 'exact',
+        path: `${ROUTE}/modules`,
+        handler: (req, res) => {
+          try {
+            const url = new URL(req.url ?? ROUTE, 'http://127.0.0.1');
+            if (req.method !== 'GET') {
+              sendJson(res, 405, { ok: false, error: 'use GET' });
+              return;
+            }
+            sendJson(res, 200, {
+              ok: true,
+              schema: 'dsh.computer-use.modules/v1',
+              // 没有安装任何扩展时这里就是空数组：不扫目录、不唤醒任何进程。
+              modules: moduleHost.list(),
+              capabilities: {
+                // 本插件自身已经证明工具注册返回 disposer（撤销即卸下入口）；
+                // 设置页与配置热更新按宿主是否提供对应服务如实报告，不猜。
+                dynamicToolRevocation: true,
+                settingsService: typeof ctx.get?.('settings') === 'object' && ctx.get('settings') !== null,
+                configEditor: typeof ctx.get?.('configEditor') === 'object' && ctx.get('configEditor') !== null,
+              },
+              note: 'extension management is a user-facing operation; this route never installs, enables or uninstalls anything',
+              ...(url.searchParams.get('verbose') === '1' ? { hostApiVersion: HOST_API_VERSION } : {}),
+            });
+          } catch (error) {
+            sendJson(res, 500, { ok: false, error: error instanceof Error ? error.message : String(error) });
+          }
+        },
+      }),
+      'computer-use: modules route',
+    );
+
     // 只读自检：不启动 worker、不碰桌面、不改状态，所以用户报告问题的当下就能跑。
     // 它存在的理由见 internal/doctor.mjs 的文件头——这一类故障的特征就是"界面上什么都没有"。
     scoped.effect(
       () => scoped.webServer.register({
         kind: 'exact',
         path: `${ROUTE}/doctor`,
-        handler: (req, res) => {
+        handler: async (req, res) => {
           try {
+            const release = await releaseCheck.ensure();
+            const { collectDoctorReport } = await import('./internal/doctor.mjs');
             const url = new URL(req.url ?? ROUTE, 'http://127.0.0.1');
             const sessionId = url.searchParams.get('sessionId') ?? undefined;
             sendJson(res, 200, {
@@ -4420,6 +5171,26 @@ export function apply(ctx, config = {}) {
                     pid: Number(backend.info?.pid ?? 0),
                   },
                 hideToolSchemasWhenOff: config.hideToolSchemasWhenOff !== false,
+                // 覆盖层的事实：开关、helper 路径与是否存在、当前状态、首帧耗时。doctor 里能看到这些，
+                // 就不必再靠猜"为什么没有横幅"。
+                indicator: {
+                  enabled: indicatorEnabled,
+                  state: indicator === null ? 'absent' : indicator.state,
+                  scope: indicatorScope?.scopeId ?? null,
+                  firstPresentMs: indicatorScope?.firstPresentMs ?? lastFirstPresentMs,
+                  helperFound: existsSync(indicatorExePath),
+                  helperPath: indicatorExePath,
+                  // 阶段 1：helper 来自显式配置、已部署安装位置，还是包内开发构建。
+                  helperSource: indicatorExeSource,
+                  protocolVersion: INDICATOR_PROTOCOL_VERSION,
+                  companionRequested: companionRequested(),
+                  companionApplied: lastCompanion,
+                  character: lastCharacterHealth,
+                  // 阶段 1 / 阶段 2 / 阶段 4：部署身份、输入投递、反馈与活动通道。
+                  // 没有这一组，doctor 只能说"钩子装上了"，说不出"输入根本送不到"。
+                  ...(indicator === null ? {} : indicator.consultation),
+                  ...(lastCharacterHealth === null ? {} : { deliveryState: lastCharacterHealth.deliveryState ?? null }),
+                },
                 // 这份报告长在宿主进程里，所以 peer 依赖那一条在这里才是真判定。
                 insideHost: true,
               }),
@@ -4447,8 +5218,18 @@ export function apply(ctx, config = {}) {
    * would be rude.
    */
   ctx.effect(() => () => {
+    callCadence.dispose();
     backend?.dispose();
     backend = null;
+    // 覆盖层 helper 也是一个独立进程：卸载时先让它收窗、摘钩、退出（`closed` 报告里有证据）。
+    if (indicator !== null) {
+      const supervisor = indicator;
+      indicator = null;
+      if (indicatorScopeTimer !== null) clearTimeout(indicatorScopeTimer);
+      indicatorScopeTimer = null;
+      indicatorScope = null;
+      void supervisor.stop();
+    }
     // The isolated read worker is a second process this plugin started, so it is a second
     // process this plugin has to stop (A10).
     readBackend?.dispose();

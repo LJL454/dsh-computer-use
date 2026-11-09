@@ -312,8 +312,19 @@ try {
   if (imageGet.length !== 0) {
     skip('the non-text clipboard clauses', 'the clipboard could not be given an image in this session');
   } else {
-    const overImage = await callTool('computer_paste', { text: PASTED, into_hwnd: hwnd });
+    // 这台桌面是别人正在用的：前台可能在这条用例跑到一半时被切走。
+    // 工具拒绝把输入发给非目标窗口是**正确行为**（FRONT_NOT_TARGET），所以这里记跳过，不是失败。
+    let overImage = null;
+    try {
+      overImage = await callTool('computer_paste', { text: PASTED, into_hwnd: hwnd });
+    } catch (error) {
+      if (!String(error?.message ?? '').includes('FRONT_NOT_TARGET')) throw error;
+      skip('the non-text clipboard clauses', 'another window took the foreground during the test');
+    }
     await sleep(200);
+    if (overImage === null) {
+      // 剩下的断言都依赖这次粘贴的回执。
+    } else {
     check('an unrestorable clipboard is reported as such', overImage.restoreStatus === 'unsupported_original_format', String(overImage.restoreStatus));
     check('and is never called restored', overImage.restored === false, String(overImage.restored));
     check('with a sentence naming what was there', typeof overImage.restoreNote === 'string' && /Bitmap|DeviceIndependentBitmap|image|PNG/i.test(overImage.restoreNote), String(overImage.restoreNote));
@@ -334,6 +345,7 @@ try {
     const afterRefusal = askFixture();
     check('nothing was pasted', afterRefusal.text === '', JSON.stringify(afterRefusal.text));
     check('and the image is still on the clipboard', (await callTool('computer_clipboard', { op: 'get' })).length === 0, 'clipboard text was non-empty');
+    }
   }
 
   /* --------------------------------------------------- external change --- */

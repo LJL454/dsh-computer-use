@@ -47,6 +47,9 @@ export const HOST_CODES = Object.freeze({
 const ENTRIES = {
   '@deepseek-ai/dsh-tools': ['@deepseek-ai', 'dsh-tools', 'lib', 'index.js'],
   '@deepseek-ai/dsh-scope': ['@deepseek-ai', 'dsh-scope', 'lib', 'index.js'],
+  // 设置页的 schema 构建器：宿主的设置界面按插件导出的 Config（schemastery）生成页面。
+  // 它只有 CommonJS 入口，`import()` 会拿到 module.exports 作为 default。
+  '@deepseek-ai/schemastery': ['@deepseek-ai', 'schemastery', 'lib', 'index.cjs'],
 };
 
 const MODULES = new Map();

@@ -29,12 +29,16 @@
  *      (and worse) mistake than not replaying one that did not.
  */
 import { spawn } from 'node:child_process';
-import { existsSync, rmSync, writeFileSync } from 'node:fs';
-import { randomBytes } from 'node:crypto';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash, randomBytes } from 'node:crypto';
 import { createInterface } from 'node:readline';
+import { buildBlockedDiagnostic, classifySecurityBlock } from '../internal/security-block.mjs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { createExitWaiter } from '../internal/generation.mjs';
+import { DELIVERY, INTERRUPTION, annotateError, createReceipt } from '../internal/receipt.mjs';
+import { Generation, STOP_BUDGETS, stopGeneration } from './supervisor.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_SCRIPT = join(HERE, 'worker.ps1');
@@ -89,6 +93,19 @@ export class PowerShellBackend {
   #script;
   #command;
   #child = null;
+  /** 进程创建的注入点（方案 4.1：把 spawn 放在边界适配器上，核心状态测试用可控驱动）。 */
+  #spawn;
+  /** 当前这一代 worker（方案 4.4 / PR06）：身份、状态与停止报告都挂在它上面。 */
+  #generation = null;
+  #nextGeneration = 1;
+  /** 最近一次**经 supervisor 的**停止报告（超时、取消宽限到期、显式停止）。 */
+  #lastStopReport = null;
+  /** 停止预算，可由构造参数覆盖；报告里带每一步的实际耗时。 */
+  #stopBudgets = STOP_BUDGETS;
+  /** 正在重启的过程中，避免 #pump 反复触发。 */
+  #restarting = false;
+  /** 正在进行的停止（六步协议），让"重启新代"能先等旧的停完。 */
+  #stopPromise = null;
   /** id -> entry for requests that have been written to the worker. */
   #pending = new Map();
   /** Requests accepted but not written yet: the part of the queue a cancel can still drop. */
@@ -122,14 +139,16 @@ export class PowerShellBackend {
    * on its way out, so a new request waits for it instead of writing into a dying pipe.
    */
   #state = 'idle';
-  /** Resolves when the process this backend killed has actually exited. */
-  #exitPromise = null;
+  /** 等待"被停掉的那一代真的退出了"（按 child 识别，见 internal/generation.mjs）。 */
+  #exitWaiter = createExitWaiter();
   /** Where the worker mirrors held input, so a force-kill can release it (§6 item 4). */
   #heldFilePath;
   /** What the last force-kill's independent release said. */
   #lastRelease = null;
   constructor(options = {}) {
     this.#script = options.scriptPath ?? DEFAULT_SCRIPT;
+    this.#spawn = typeof options.spawn === 'function' ? options.spawn : spawn;
+    this.#stopBudgets = { ...STOP_BUDGETS, ...(options.stopBudgets ?? {}) };
     this.#command = options.powerShell ?? resolvePowerShell();
     this.#defaultTimeoutMs = options.timeoutMs ?? 30_000;
     // Startup is slower than any single command (Add-Type compiles the P/Invoke helpers
@@ -183,6 +202,16 @@ export class PowerShellBackend {
    */
   async start() {
     if (this.#disposed) throw new ComputerUseBackendError('the computer-use backend has been disposed', 'DISPOSED');
+    // 被安全软件**确认**拦下之后，同一个文件不再拉起：每次重试都会再触发一次扫描，用户只会看到
+    // "又失败了"。诊断随错误一起返回，等用户处理完（更新情报/复核版本）再显式清掉。
+    if (this.#securityBlock !== null && this.#securityBlock.confidence === 'confirmed') {
+      const error = new ComputerUseBackendError(
+        `the computer-use worker was blocked by ${this.#securityBlock.vendor} (${this.#securityBlock.errorId || this.#securityBlock.signature})`,
+        SECURITY_BLOCK_CODE,
+      );
+      error.diagnostic = this.#securityBlock;
+      throw error;
+    }
     if (this.#ready !== null && (this.#state === 'starting' || this.#state === 'ready')) return this.#ready;
     // A worker was killed to break a stuck call: wait for that process to be gone before
     // binding a new request to anything (§5.12: 超时后等待旧实例退出或隔离).
@@ -194,7 +223,7 @@ export class PowerShellBackend {
     // A stale marker from an earlier worker would cancel this one's first request.
     this.#clearCancelFile();
     this.#state = 'starting';
-    const child = spawn(
+    const child = this.#spawn(
       this.#command,
       ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', this.#script],
       {
@@ -204,6 +233,10 @@ export class PowerShellBackend {
       },
     );
     this.#child = child;
+    // 每一代都有自己的身份：进程、取消文件、引用代次都跟着它走，旧代的事件不会被当成新代的。
+    this.#generation = new Generation({ id: this.#nextGeneration, child, budgets: this.#stopBudgets });
+    this.#nextGeneration += 1;
+    this.#generation.markStarting();
     this.#stats.spawns += 1;
     this.#stderr = [];
     child.stderr.setEncoding('utf8');
@@ -253,12 +286,82 @@ export class PowerShellBackend {
       // disguise (the fault-injection test caught exactly that).
       if (this.#child !== child) return;
       const detail = `the computer-use worker exited (code ${code ?? 'null'}${signal ? `, signal ${signal}` : ''})`;
+      // 计划内的停止（六步协议正在跑）与"进程自己死了"必须分开：前者里排队的请求**一次都没派发**，
+      // 它们属于下一代；后者只能全部失败。方案 4.4 第 6 步就是这条。
+      const planned = this.#stopPromise !== null || this.#state === 'stopping';
       this.#failReady(new ComputerUseBackendError(`${detail}: ${this.#stderrText()}`, 'WORKER_EXITED'));
-      this.#failOutstanding(new ComputerUseBackendError(`${detail}: ${this.#stderrText()}`, 'WORKER_EXITED'));
+      if (planned) {
+        for (const entry of [...this.#pending.values()]) {
+          // 已经进入停止路径的请求由那条路径自己结算（超时要报超时、取消要报取消），这里不能
+          // 用"worker 退出了"覆盖它的原因。它占用的运行位会在那次停止的 `.then` 里清掉。
+          if (entry.stopping === true) continue;
+          this.#finish(entry, this.#copyFailure(entry, new ComputerUseBackendError(`${detail}: ${this.#stderrText()}`, 'WORKER_EXITED'), INTERRUPTION.driver_exit));
+        }
+      } else {
+        this.#failOutstanding(new ComputerUseBackendError(`${detail}: ${this.#stderrText()}`, 'WORKER_EXITED'));
+      }
       this.#teardown();
+      // 方案 4.19.3：被安全软件拦下的同一个文件不再自动重启 —— 换一种 PowerShell 调用方式继续试
+      // 同样不会通过，只会把"确定被拦"变成"反复被拦"。诊断留在 `lastSecurityBlock` 里给 status 用。
+      this.#recordSecurityBlock({ phase: 'launch', exitCode: code, signal, stderr: this.#stderrText() });
+      if (planned && !this.#disposed && this.#queue.length > 0 && this.#securityBlock === null) void this.#restartThenPump();
     });
 
     return this.#ready;
+  }
+
+  /** 最近一次被安全软件拦截的诊断（方案 4.19.3 的 `BackendBlockedBySecurity`）。 */
+  #securityBlock = null;
+  /** 驱动代次：每次成功拉起 worker 递增，诊断里用它对齐"哪一代被拦"。 */
+  #driverGeneration = 0;
+  /** worker.ps1 的 SHA256（读一次就缓存）：诊断里要能对上具体文件。 */
+  #scriptHashCache = null;
+
+  get generation() {
+    return this.#driverGeneration;
+  }
+
+  get #scriptHash() {
+    if (this.#scriptHashCache !== null) return this.#scriptHashCache;
+    try {
+      this.#scriptHashCache = createHash('sha256').update(readFileSync(this.#script)).digest('hex');
+    } catch {
+      this.#scriptHashCache = '';
+    }
+    return this.#scriptHashCache;
+  }
+
+  get lastSecurityBlock() {
+    return this.#securityBlock;
+  }
+
+  /**
+   * 显式清除"被拦"的诊断，让下一次启动重新尝试。
+   *
+   * 只给用户的明确动作调用（例如更新了安全情报并确认版本无误之后）；模型不能靠换一个会话
+   * 或重试工具来绕开它。
+   */
+  clearSecurityBlock() {
+    this.#securityBlock = null;
+  }
+
+  /**
+   * 把这次退出归类：真的被拦才记诊断，并且**只有**在确认被拦时禁止自动重启。
+   *
+   * @param {object} detail - `{ phase, exitCode, signal, stderr, delivery }`。
+   */
+  #recordSecurityBlock(detail) {
+    const stderr = typeof detail?.stderr === 'string' ? detail.stderr : '';
+    if (classifySecurityBlock(stderr).blocked === false) return null;
+    this.#securityBlock = buildBlockedDiagnostic({
+      phase: detail?.phase ?? 'launch',
+      stderr,
+      exitCode: detail?.exitCode,
+      driverGeneration: this.generation,
+      delivery: detail?.delivery,
+      scriptHash: this.#scriptHash,
+    });
+    return this.#securityBlock;
   }
 
   #readyTimer = null;
@@ -295,28 +398,116 @@ export class PowerShellBackend {
   }
 
   /**
-   * Kill one worker process. Its `exit` handler rejects anything still pending
-   * and clears the handle, so the next `start()` spawns a fresh backend.
+   * Stop one worker generation through the six-step protocol (方案 4.4 / PR06).
    *
-   * §6 item 4: a killed worker never reaches the `finally` that unwinds held input, so before
-   * the kill this asks an *independent* process (`backend/release-input.ps1`) to release exactly
-   * what the worker recorded as held. The outcome is kept on the backend (`lastRelease`) and
-   * attached to the requests the kill rejects, because "the worker was stopped" and "the input
-   * was released" are two different facts and the caller has to be able to tell them apart.
+   * 旧实现是"发 shutdown，800 毫秒后 kill"：没有准入关闭、没有协作等待与强制终止的分界，
+   * 也分不清"进程真的没了"与"按住的键真的松了"。现在顺序、预算与报告都在
+   * `backend/supervisor.mjs` 里，这里只负责把本后端的钩子接上去：
+   *
+   *   closeAdmission → 拒绝新请求（并可选择把未派发请求记为取消）
+   *   waitForDrain   → 协作预算内等在飞请求结束
+   *   kill           → 终止受控旧进程
+   *   waitForExit    → 按 child 等实际退出（internal/generation.mjs）
+   *   release        → 独立释放程序（held-input 清单）
+   *   cleanup        → 清取消标记
    *
    * @param child - the process to stop; defaults to the current one.
-   * @returns a promise for the process actually being gone.
+   * @param options - `{ reason, cancelQueued }`。
+   * @returns 停止报告，或 null（没有进程可停）。
    */
-  async #stopChild(child = this.#child) {
-    if (child === null || child === undefined) return Promise.resolve();
+  async #stopChild(child = this.#child, options = {}) {
+    if (child === null || child === undefined) return null;
     if (!this.#disposed) this.#state = 'stopping';
-    await this.#releaseHeldInput();
+    const generation = this.#generation !== null && this.#generation.child === child
+      ? this.#generation
+      : new Generation({ id: 0, child, budgets: this.#stopBudgets });
+    // 同一代只跑一次停止；这里再记一个进程外的 promise，好让"重启新代"能先等旧的停完。
+    const running = (async () => stopGeneration(generation, {
+      reason: options.reason ?? 'the worker was stopped',
+      closeAdmission: (reason) => {
+        if (!this.#disposed) this.#state = 'stopping';
+        if (options.cancelQueued !== true) return 0;
+        const queued = this.#queue.splice(0);
+        for (const entry of queued) {
+          const failure = new ComputerUseBackendError(`${reason}; the request was dropped before dispatch, so nothing was sent to the desktop`, 'ABORTED');
+          failure.interruption = INTERRUPTION.cancel;
+          this.#settle(entry, failure, undefined);
+        }
+        return queued.length;
+      },
+      cancelInFlight: () => {
+        // 取消标记由触发停止的那条路径写好（超时不需要，取消路径已经写过）。
+        return true;
+      },
+      waitForDrain: (ms) => this.#drainPending(ms),
+      kill: () => {
+        try {
+          if (child.exitCode === null) child.kill();
+        } catch {
+          /* the process is already gone */
+        }
+      },
+      waitForExit: () => this.#exitWaiter.waitForExit(child),
+      release: () => this.#releaseHeldInput(),
+      cleanup: () => this.#clearCancelFile(),
+    }))();
+    // 同一个身份陷阱（PR04 的教训）：`#stopPromise` 要存 finally 派生的那个 promise，比较的也必须
+    // 是它自己，否则引用永远清不掉，"还在停"就会变成永久状态。
+    const finalPromise = running.finally(() => {
+      if (this.#stopPromise === finalPromise) this.#stopPromise = null;
+    });
+    this.#stopPromise = finalPromise;
+    const report = await running;
+    this.#lastStopReport = report;
+    return report;
+  }
+
+  /**
+   * 等旧代停完，再起一代新的，然后继续派发队列里的请求。
+   *
+   * 旧行为是"上一代停了，队列里所有请求一起以 WORKER_EXITED 失败"：一次超时会让别的会话
+   * 排队的调用陪葬，而它们**一次都没写出去**。现在它们被放回队列，在新代上继续跑 —— 这正是
+   * 回执里 `not_sent` 的含义（方案 4.5：只有能证明未派发时才允许记录 not_sent）。
+   *
+   * 失败路径不需要额外的重试风暴：`start()` 自己会在启动失败时把队列判掉。
+   */
+  async #restartThenPump() {
+    if (this.#disposed || this.#restarting) return;
+    this.#restarting = true;
     try {
-      if (child.exitCode === null) child.kill();
+      if (this.#stopPromise !== null) await this.#stopPromise.catch(() => {});
+      this.#teardown();
+      if (this.#disposed) return;
+      this.#state = 'idle';
+      await this.start();
     } catch {
-      /* the process is already gone */
+      /* start() 已经把队列判掉：这里的失败不再重复报告 */
+    } finally {
+      this.#restarting = false;
+      this.#pump();
     }
-    return this.#exited(child);
+  }
+
+  /**
+   * 在协作预算内等在飞请求结束。
+   * @param ms - 预算。
+   * @returns 是否真的清空了。
+   */
+  async #drainPending(ms) {
+    const deadline = Date.now() + Math.max(0, ms);
+    const active = () => [...this.#pending.values()].filter((entry) => entry.stopping !== true).length;
+    while (active() > 0 && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    return active() === 0;
+  }
+
+  /**
+   * 最近一次经 supervisor 的停止报告（超时、取消宽限到期、显式停止）。
+   * `dispose()` 走的是宿主卸载时那条更短的路，不在其列。
+   */
+  get lastStopReport() {
+    return this.#lastStopReport;
   }
 
   /**
@@ -389,27 +580,17 @@ export class PowerShellBackend {
    * Wait for the process this backend stopped to be really gone. A killed process still holds
    * its stdin for a moment, and writing a request into that window is how a fresh call lands
    * in a dying instance.
+   *
+   * 方案 4.4 / PR04：判定逻辑搬到 `internal/generation.mjs` 的等待器里，按 child 识别、同一个
+   * child 只挂一份 Promise、结果显式区分 `exited`/`error`/`timeout`/`absent`。原来的写法把
+   * `wait.finally(...)` 的返回值存进 `#exitPromise`，却在 finally 里拿 `wait` 去比较，引用永远
+   * 清不掉 —— 下一次停止会拿到上一代那个已解析的 Promise，把"没退出"报告成"已退出"。
+   *
+   * @param child - the process to wait for; defaults to the current one.
+   * @returns `'exited' | 'error' | 'timeout' | 'absent'`（2 秒预算用尽即 `timeout`，不等于已退出）。
    */
   #exited(child = this.#child) {
-    if (this.#exitPromise !== null) return this.#exitPromise;
-    if (child === null || child === undefined || child.exitCode !== null) return Promise.resolve();
-    const wait = new Promise((resolve) => {
-      let done = false;
-      const finish = () => {
-        if (done) return;
-        done = true;
-        clearTimeout(timer);
-        resolve();
-      };
-      const timer = setTimeout(finish, 2_000);
-      timer.unref?.();
-      child.once('exit', finish);
-      child.once('error', finish);
-    });
-    this.#exitPromise = wait.finally(() => {
-      if (this.#exitPromise === wait) this.#exitPromise = null;
-    });
-    return this.#exitPromise;
+    return this.#exitWaiter.waitForExit(child);
   }
 
   /** @deprecated use #stopChild; kept for the internal call sites' readability. */
@@ -433,7 +614,77 @@ export class PowerShellBackend {
       entry.signal.removeEventListener('abort', entry.onAbort);
     }
     if (error === null) entry.resolve(value);
-    else entry.reject(error);
+    else entry.reject(this.#annotate(entry, error));
+  }
+
+  /**
+   * 给一个失败补上回执（方案 4.3 / PR05）。
+   *
+   * 回执在**离开传输层的那一刻**生成：那时 `entry.delivery` 已经是它最终的样子（没写过 /
+   * 写进去了 / 收到了应答 / 不确定），不需要调用方再去猜。已经带 `receipt` 的错误原样返回，
+   * 这样更精确的中断原因（超时、取消）不会被这里覆盖。
+   *
+   * @param entry - 请求。
+   * @param error - 失败。
+   * @returns 标注后的同一个错误。
+   */
+  #annotate(entry, error) {
+    if (error === null || typeof error !== 'object') return error;
+    if (error.receipt !== undefined) return error;
+    const timings = {};
+    if (Number.isFinite(entry?.queueMs)) timings.queueMs = Math.round(entry.queueMs);
+    if (Number.isFinite(entry?.startMs)) timings.startMs = Math.round(entry.startMs);
+    if (entry?.sentAt !== null && entry?.sentAt !== undefined) timings.workerMs = Math.round(performance.now() - entry.sentAt);
+    return annotateError(error, createReceipt({
+      requestId: entry?.id ?? null,
+      delivery: entry?.delivery ?? DELIVERY.not_sent,
+      interruption: error.interruption ?? INTERRUPTION.none,
+      errorCode: error.code ?? null,
+      timings,
+    }));
+  }
+
+  /**
+   * 复制一份失败，用于"同一个原因、不同请求"的场景。
+   *
+   * 旧实现把**同一个** Error 实例拒给所有请求，于是每个请求各自走到了哪一步无从表达（方案 1.2
+   * 第四条）。复制时只搬既有语义字段，再按该请求自己的派发状态写回执。
+   *
+   * @param entry - 这个副本所属的请求。
+   * @param error - 原始失败。
+   * @param interruption - 该路径的中断原因。
+   */
+  #copyFailure(entry, error, interruption) {
+    const copy = error instanceof ComputerUseBackendError
+      ? new ComputerUseBackendError(error.message, error.code)
+      : new Error(String(error?.message ?? error));
+    for (const key of ['dispatched', 'canceled', 'performed', 'actionSent', 'partial', 'queueMs', 'releaseConfirmed', 'released', 'releaseError', 'stderrTail']) {
+      if (error?.[key] !== undefined) copy[key] = error[key];
+    }
+    copy.interruption = interruption;
+    return copy;
+  }
+
+  /**
+   * Reject everything queued or in flight — used when the worker dies or is disposed.
+   *
+   * 每个请求拿到的是**独立**的副本：排队的那些还停在 `not_sent`（它们确实没出去），在飞的那一个
+   * 可能已经是 `sent_to_driver` 或 `unknown`。这正是方案 4.3 要求"遍历 pending 逐条生成错误回执"
+   * 的原因。
+   *
+   * @param error - the failure to report.
+   * @param interruption - `driver_exit`（进程没了）或 `cancel`（主动 dispose）。
+   */
+  #failOutstanding(error, interruption = INTERRUPTION.driver_exit) {
+    const queued = this.#queue.splice(0);
+    for (const entry of queued) this.#settle(entry, this.#copyFailure(entry, error, interruption), undefined);
+    // 正在走六步停止的那条请求由停止路径自己结算（它要带上超时/取消的原因和停止报告里的
+    // 释放事实）。这里若也用"worker 退出了"去覆盖它，回执会把一次超时写成一次进程死亡。
+    for (const entry of [...this.#pending.values()]) {
+      if (entry.stopping === true) continue;
+      this.#finish(entry, this.#copyFailure(entry, error, interruption));
+    }
+    this.#runningId = null;
   }
 
   /**
@@ -459,13 +710,7 @@ export class PowerShellBackend {
     else this.#settle(entry, error, undefined);
   }
 
-  /** Reject everything queued or in flight — used when the worker dies or is disposed. */
-  #failOutstanding(error) {
-    const queued = this.#queue.splice(0);
-    for (const entry of queued) this.#settle(entry, error, undefined);
-    for (const entry of [...this.#pending.values()]) this.#finish(entry, error);
-    this.#runningId = null;
-  }
+  /** Reject everything queued or in flight — the body lives in #failOutstanding above. */
 
   #onLine(line) {
     const text = line.trim();
@@ -481,6 +726,8 @@ export class PowerShellBackend {
       this.#info = payload.info ?? {};
       clearTimeout(this.#readyTimer);
       this.#state = 'ready';
+      this.#driverGeneration += 1;
+      this.#generation?.markReady();
       const resolve = this.#readyResolve;
       this.#readyReject = null;
       this.#readyResolve = null;
@@ -517,6 +764,9 @@ export class PowerShellBackend {
       const error = new ComputerUseBackendError(`${entry.cmd} failed: ${payload.error ?? 'unknown error'}`, code);
       error.dispatched = true;
       error.canceled = payload.canceled === true;
+      // 收到应答是唯一能证明"驱动确实处理过这条请求"的证据，所以回执在这一刻升到 driver_ack。
+      entry.delivery = DELIVERY.driver_ack;
+      error.interruption = payload.canceled === true ? INTERRUPTION.cancel : INTERRUPTION.none;
       if (payload.performed !== undefined) error.performed = payload.performed;
       if (payload.actionSent !== undefined) error.actionSent = payload.actionSent === true;
       if (payload.partial !== undefined) error.partial = payload.partial === true;
@@ -539,8 +789,11 @@ export class PowerShellBackend {
     if (entry.settledCaller) return this.#pump();
     const child = this.#child;
     if (child === null || child.exitCode !== null) {
-      this.#finish(entry, new ComputerUseBackendError('the computer-use worker is not running', 'WORKER_EXITED'));
-      return this.#pump();
+      // 方案 4.4 / PR06 第 6 步：未派发的请求属于**下一**代，不该因为上一代被停就一起失败。
+      // 把它们放回队列，先把旧的停完、再起一个新 worker，然后继续派发。
+      this.#queue.unshift(entry);
+      void this.#restartThenPump();
+      return;
     }
     // The line is built *before* the run slot is taken. Arguments that cannot be turned
     // into one JSON line used to reject the caller while leaving the slot occupied, so the
@@ -571,26 +824,41 @@ export class PowerShellBackend {
       // observe before deciding, never replay blindly.
       error.dispatched = true;
       error.queueMs = Math.round(entry.queueMs);
-      // §6 item 4: a killed worker never runs the `finally` that unwinds held input, so the
-      // independent release runs *before* the process goes away -- and what it managed to do is
-      // reported with the failure. The caller can then tell "the worker was stopped" from "the
-      // mouse button you were holding was released". The wait is bounded and skipped entirely
-      // when the worker recorded nothing held, which is the ordinary case.
-      void this.#releaseHeldInput().then((release) => {
-        if (release !== null && release !== undefined) {
-          error.releaseConfirmed = release.releaseConfirmed === true;
-          error.released = Array.isArray(release.released) ? release.released : [];
-          if (release.releaseError !== undefined) error.releaseError = String(release.releaseError);
+      // 超时：`sent_to_driver` 说明写入已 flush，`unknown` 说明连这一步都没能确认 —— 两者都不能
+      // 记成 not_sent，也都不能重放。中断原因是 timeout，恢复建议因此是 stop（先停再看）。
+      error.interruption = INTERRUPTION.timeout;
+      // §6 item 4 / 方案 4.4：超时之后走完整的六步停止协议 —— 关闭准入、协作等待、终止、
+      // 等实际退出、独立释放、清理，再把**停止报告**里的事实挂到这次失败上。调用方因此能分别
+      // 读出"worker 被停了"（stopReport.exitConfirmed）与"按住的键松了"（releaseConfirmed）。
+      // 这条请求自己已经被判超时，先标 stopping，让协作等待不必再等它。
+      entry.stopping = true;
+      void this.#stopChild(child, { reason: `${entry.cmd} did not answer within ${entry.timeoutMs} ms` }).then((report) => {
+        if (report !== null) {
+          error.releaseConfirmed = report.releaseConfirmed === true;
+          error.released = Array.isArray(report.released) ? report.released : [];
+          if (report.releaseError !== undefined) error.releaseError = String(report.releaseError);
+          error.stopReport = report;
         }
         this.#finish(entry, error);
-        // The next request waits for this process to be gone before it binds to an instance.
-        void this.#stopChild();
+        // 停止完成、运行位已清：队列里的下一条要去新一代上跑（#pump 会触发重启）。
+        this.#pump();
       });
     }, entry.timeoutMs);
     try {
-      child.stdin.write(line);
+      // 写入回调是"这行字节真的出了本进程"的唯一证据：返回 true 只表示还排在内存缓冲里。
+      // 因此在回调成功之前，回执停在 sent_to_driver 之前的状态；回调报错则记为 unknown ——
+      // 已经写过就说不清落没落地（方案 4.3：只有能证明未派发时才允许记录 not_sent）。
+      child.stdin.write(line, (writeError) => {
+        if (writeError) {
+          entry.delivery = DELIVERY.unknown;
+          return;
+        }
+        if (entry.delivery === DELIVERY.not_sent) entry.delivery = DELIVERY.sent_to_driver;
+      });
     } catch (error) {
-      this.#finish(entry, new ComputerUseBackendError(`could not write to the computer-use worker: ${error.message}`, 'WRITE_FAILED'));
+      const failure = new ComputerUseBackendError(`could not write to the computer-use worker: ${error.message}`, 'WRITE_FAILED');
+      failure.interruption = INTERRUPTION.none;
+      this.#finish(entry, failure);
       this.#pump();
     }
   }
@@ -609,6 +877,7 @@ export class PowerShellBackend {
       // The important half of "cancel": this action never reached the desktop, and
       // it never will — not even after the cancel, which is what a caller assumes.
       const error = new ComputerUseBackendError(`${reason}; the request was dropped before dispatch, so nothing was sent to the desktop`, 'ABORTED');
+      error.interruption = INTERRUPTION.cancel;
       this.#settle(entry, error, undefined);
       return;
     }
@@ -616,6 +885,7 @@ export class PowerShellBackend {
     this.#touchCancelFile(String(entry.id));
     const error = new ComputerUseBackendError(`${reason}; ${entry.cmd} had already been dispatched, so the worker was told to stop at the next step boundary`, 'CANCELLED');
     error.dispatched = true;
+    error.interruption = INTERRUPTION.cancel;
     this.#settle(entry, error, undefined);
     // The worker is single-threaded: a blocking Win32 or UI Automation call inside
     // it can only be stopped by stopping it. Give it the grace period to finish
@@ -623,7 +893,13 @@ export class PowerShellBackend {
     entry.graceTimer = setTimeout(() => {
       if (this.#pending.has(entry.id)) {
         this.#stderr.push(`\ncancel: ${entry.cmd} (id ${entry.id}) did not stop within ${this.#cancelGraceMs} ms; stopping the worker\n`);
-        this.#stopChild();
+        // 宽限到期：走六步停止协议，并把这条请求标成 stopping，让协作等待不再等它。
+        entry.stopping = true;
+        void this.#stopChild(this.#child, { reason: `${entry.cmd} did not stop within ${this.#cancelGraceMs} ms` }).then(() => {
+          // 调用方早已收到 CANCELLED；这里只清掉它占用的运行位，好让队列继续（通常是在新一代上）。
+          this.#finish(entry, null);
+          this.#pump();
+        });
       }
     }, this.#cancelGraceMs);
   }
@@ -635,6 +911,29 @@ export class PowerShellBackend {
    */
   cancelAll(reason = 'the capability was turned off') {
     const entries = [...this.#queue, ...this.#pending.values()];
+    let cancelled = 0;
+    for (const entry of entries) {
+      const settledBefore = entry.settledCaller;
+      this.#cancelEntry(entry, reason);
+      if (!settledBefore && entry.settledCaller) cancelled += 1;
+    }
+    return cancelled;
+  }
+
+  /**
+   * Cancel one session's requests, queued or in flight, and leave every other session alone.
+   *
+   * 方案 4.5 / PR07：撤销一个会话时旧实现调用的是 `cancelAll` —— 一个宿主进程只有一个 worker，
+   * 于是"关掉会话 A"会把会话 B 正在跑的那次调用一起取消，B 看到的是自己无法解释的中断。
+   * 取消是**按会话**的事实，不是按进程的事实。
+   *
+   * @param sessionKey - 要取消的会话（`''` 是匿名会话；`undefined` 表示不匹配任何会话）。
+   * @param reason - text for the callers.
+   * @returns how many requests it actually cancelled.
+   */
+  cancelSession(sessionKey, reason = 'the capability was turned off') {
+    if (typeof sessionKey !== 'string') return 0;
+    const entries = [...this.#queue, ...this.#pending.values()].filter((entry) => (entry.sessionKey ?? '') === sessionKey);
     let cancelled = 0;
     for (const entry of entries) {
       const settledBefore = entry.settledCaller;
@@ -677,6 +976,8 @@ export class PowerShellBackend {
     const signal = options.signal;
     if (signal?.aborted === true) {
       const error = new ComputerUseBackendError('the call was cancelled before it was dispatched; nothing was sent to the desktop', 'ABORTED');
+      error.interruption = INTERRUPTION.cancel;
+      annotateError(error, createReceipt({ delivery: DELIVERY.not_sent, interruption: INTERRUPTION.cancel, errorCode: 'ABORTED' }));
       throw error;
     }
     const id = this.#nextId;
@@ -688,11 +989,16 @@ export class PowerShellBackend {
       args,
       signal,
       written: false,
+      // 回执的起点：还没写进管道。`#pump` 在 flush 确认后升到 sent_to_driver，`#onLine` 在应答
+      // 到达时升到 driver_ack；任何一步没被确认就停在原地或落到 unknown（方案 4.3）。
+      delivery: DELIVERY.not_sent,
       settledCaller: false,
       timer: null,
       graceTimer: null,
       onAbort: undefined,
       timeoutMs: options.timeoutMs ?? this.#defaultTimeoutMs,
+      /** 这次请求属于哪个会话（'' 是匿名）。按会话取消只认它，不再波及别的会话（方案 4.5）。 */
+      sessionKey: typeof options.sessionKey === 'string' ? options.sessionKey : '',
       // Timestamps for the queue split: accepted here, written to the worker in #pump.
       // Measured with performance.now() rather than the wall clock, because the difference
       // between two of these is a duration and nothing else.
@@ -725,7 +1031,7 @@ export class PowerShellBackend {
     // A `start()` that is still waiting for its readiness line is a caller too: without this
     // it awaited a promise nothing would ever settle (§5.12).
     this.#failReady(new ComputerUseBackendError('the computer-use backend was disposed while starting', 'DISPOSED'));
-    this.#failOutstanding(new ComputerUseBackendError('the computer-use backend was disposed', 'DISPOSED'));
+    this.#failOutstanding(new ComputerUseBackendError('the computer-use backend was disposed', 'DISPOSED'), INTERRUPTION.cancel);
     if (child !== null && child.exitCode === null) {
       try {
         child.stdin.write(`${JSON.stringify({ id: 0, cmd: 'shutdown', args: {} })}\n`);

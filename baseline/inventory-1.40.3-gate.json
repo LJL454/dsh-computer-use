@@ -1,0 +1,2753 @@
+{
+  "schema": 1,
+  "generatedBy": "tools/baseline-snapshot.mjs",
+  "name": "@local/dsh-computer-use",
+  "version": "1.40.3",
+  "package": {
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./package.json": "./package.json",
+      "./cordis.patch.yml": "./cordis.patch.yml"
+    },
+    "engines": {
+      "node": ">=20",
+      "dsh": ">=0.2.1-rc.2 <0.3.0"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "doctor.mjs",
+      "setup.mjs",
+      "release-manifest.json",
+      "README.md",
+      "INSTALL.md",
+      "VERIFICATION.md",
+      "CHANGELOG.md",
+      "backend",
+      "browser",
+      "internal",
+      "presets",
+      "cordis.patch.yml",
+      "live-tool-test.mjs",
+      "schema-test.mjs",
+      "host-contract-test.mjs",
+      "security-block-test.mjs",
+      "degraded-bootstrap-test.mjs",
+      "migration-drill-test.mjs",
+      "harness-test.mjs",
+      "client-smoke.mjs",
+      "lifecycle-test.mjs",
+      "task-eval.mjs",
+      "pacing-test.mjs",
+      "stability-probe.mjs",
+      "wait-and-capture-test.mjs",
+      "coordinate-contract-test.mjs",
+      "host-runtime-test.mjs",
+      "browser-connection-test.mjs",
+      "deadline-test.mjs",
+      "batch-progress-test.mjs",
+      "managed-find-test.mjs",
+      "stop-report-test.mjs",
+      "attachment-state-test.mjs",
+      "build-cache-test.mjs",
+      "traversal-budget-test.mjs",
+      "com-scope-test.mjs",
+      "lease-test.mjs",
+      "token-guard-test.mjs",
+      "test-schema-visibility.mjs",
+      "merge-mount-test.mjs",
+      "app-candidates-test.mjs",
+      "compile-check.ps1",
+      "fix-profile-links.cmd",
+      "install-and-repair.cmd",
+      "engine-ab.mjs",
+      "real-tools-probe.mjs",
+      "bench.mjs",
+      "probe.mjs",
+      "probe-uia.mjs",
+      "probe-launch.mjs",
+      "probe-text.mjs",
+      "diag-*.mjs",
+      "uia-diag.mjs",
+      "survey-uia.mjs",
+      "capture-format-probe.ps1",
+      "cleanup-test-windows.mjs",
+      "tests",
+      "tools"
+    ],
+    "compatibility": {
+      "dsh": ">=0.2.1-rc.2 <0.3.0",
+      "node": ">=20",
+      "systems": [
+        "win32"
+      ],
+      "profiles": [
+        "desktop"
+      ],
+      "dshReleases": {
+        "0.2.1-rc.1": "unknown",
+        "0.2.1-rc.2": "compatible",
+        "0.2.1-rc.3": "compatible"
+      },
+      "dshOperations": {
+        "0.2.1-rc.2": {
+          "install": "passed",
+          "start": "passed",
+          "uninstall": "passed",
+          "rollback": "unknown"
+        },
+        "0.2.1-rc.3": {
+          "install": "passed",
+          "start": "passed",
+          "uninstall": "unknown",
+          "rollback": "unknown"
+        }
+      }
+    }
+  },
+  "tools": {
+    "app_env_audit": {
+      "parameters": {},
+      "outputKeys": [
+        "explanation",
+        "present",
+        "sessionIsPolluted",
+        "wouldStrip"
+      ],
+      "outputClosed": true
+    },
+    "app_launch": {
+      "parameters": {
+        "target": {
+          "type": "string",
+          "required": true,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "arguments": {
+          "type": "array",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "cwd": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "waitMs": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "detach": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "verifyWindow": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "kind": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        }
+      },
+      "outputKeys": [
+        "durationMs",
+        "error",
+        "exitCode",
+        "exited",
+        "fuzzyMatch",
+        "hint",
+        "imageName",
+        "inspectionError",
+        "ok",
+        "pid",
+        "resolved",
+        "state",
+        "stripped",
+        "target",
+        "viaExplorer",
+        "waitedMs",
+        "windowMatch",
+        "windows"
+      ],
+      "outputClosed": true
+    },
+    "browser_actions": {
+      "parameters": {
+        "steps": {
+          "type": "array",
+          "required": true,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "tab": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "state": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        }
+      },
+      "outputKeys": [
+        "actionSent",
+        "browser",
+        "budgetMs",
+        "collected",
+        "elapsedMs",
+        "error",
+        "failedAt",
+        "nextStep",
+        "nodes",
+        "note",
+        "outcome",
+        "path",
+        "performed",
+        "returned",
+        "status",
+        "tab",
+        "truncated",
+        "verification"
+      ],
+      "outputClosed": true
+    },
+    "browser_state": {
+      "parameters": {
+        "view": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "tab": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "filter": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "max_nodes": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "max_chars": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        }
+      },
+      "outputKeys": [
+        "browser",
+        "budget",
+        "collected",
+        "documentGeneration",
+        "nodes",
+        "note",
+        "path",
+        "refs",
+        "returned",
+        "returnedChars",
+        "snapshots",
+        "status",
+        "tab",
+        "tabs",
+        "text",
+        "total",
+        "truncated",
+        "view"
+      ],
+      "outputClosed": true
+    },
+    "computer_actions": {
+      "parameters": {
+        "steps": {
+          "type": "array",
+          "required": true,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "screenshot": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "state": {
+          "type": "object",
+          "required": false,
+          "properties": [
+            "automation_id",
+            "control_type",
+            "filter",
+            "hwnd",
+            "max_depth",
+            "max_nodes",
+            "max_selected",
+            "max_text_chars",
+            "name",
+            "patterns",
+            "prune",
+            "since",
+            "skip_empty",
+            "text",
+            "text_target"
+          ],
+          "additionalProperties": false
+        },
+        "wait_for": {
+          "type": "object",
+          "required": false,
+          "properties": [
+            "any",
+            "automation_id",
+            "class_name",
+            "contains",
+            "control_type",
+            "enabled",
+            "every",
+            "expected",
+            "expected_digest",
+            "hwnd",
+            "is",
+            "kind",
+            "match",
+            "max_side",
+            "min_bytes",
+            "mode",
+            "name",
+            "parse",
+            "path",
+            "pid",
+            "process",
+            "process_exact",
+            "rect",
+            "stable_for_ms",
+            "stable_ms",
+            "title",
+            "title_exact",
+            "visible"
+          ],
+          "additionalProperties": false
+        },
+        "evidence": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "stop_on_window_change": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "expected_transitions": {
+          "type": "array",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "deadline_ms": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "settle_ms": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "stability_ms": {
+          "type": "number",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "stable": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "save_path": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "scale": {
+          "type": "number",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "format": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "poll_ms": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "window": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "require_window": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "display": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "region": {
+          "type": "object",
+          "required": false,
+          "properties": [
+            "height",
+            "width",
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        },
+        "region_space": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "surface": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "clip": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        }
+      },
+      "outputKeys": [
+        "actionSent",
+        "canceled",
+        "captureUsed",
+        "count",
+        "deadlineMet",
+        "deadlineMs",
+        "error",
+        "evidence",
+        "failedAt",
+        "nextStep",
+        "observation",
+        "outOfBudget",
+        "outcome",
+        "overDeadlineMs",
+        "partial",
+        "partialSteps",
+        "performed",
+        "progress",
+        "shot",
+        "state",
+        "timing",
+        "transitions",
+        "waits",
+        "wroteSteps"
+      ],
+      "outputClosed": true
+    },
+    "computer_click": {
+      "parameters": {
+        "x": {
+          "type": "integer",
+          "required": true,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "y": {
+          "type": "integer",
+          "required": true,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "button": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "clicks": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "modifiers": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "prefer_a11y": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "allow_activate": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "verify_content": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "allow_windows": {
+          "type": "array",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "from_frame": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        }
+      },
+      "outputKeys": [
+        "button",
+        "clicks",
+        "element",
+        "frame",
+        "modifiers",
+        "via",
+        "x",
+        "y"
+      ],
+      "outputClosed": true
+    },
+    "computer_clipboard": {
+      "parameters": {
+        "op": {
+          "type": "string",
+          "required": true,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "text": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        }
+      },
+      "outputKeys": [
+        "length",
+        "op",
+        "text",
+        "truncated"
+      ],
+      "outputClosed": true
+    },
+    "computer_drag": {
+      "parameters": {
+        "from_x": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "from_y": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "to_x": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "to_y": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "from_last": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "continue_from": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "path": {
+          "type": "array",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "duration_ms": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "modifiers": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "allow_activate": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "verify_content": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "allow_windows": {
+          "type": "array",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "from_frame": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        }
+      },
+      "outputKeys": [
+        "frame",
+        "from",
+        "handle",
+        "modifiers",
+        "path",
+        "to"
+      ],
+      "outputClosed": true
+    },
+    "computer_key": {
+      "parameters": {
+        "keys": {
+          "type": "string",
+          "required": true,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "into_hwnd": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "repeat": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "hold_seconds": {
+          "type": "number",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        }
+      },
+      "outputKeys": [
+        "foreground",
+        "heldMs",
+        "keys",
+        "repeat"
+      ],
+      "outputClosed": true
+    },
+    "computer_launch": {
+      "parameters": {
+        "target": {
+          "type": "string",
+          "required": true,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "arguments": {
+          "type": "array",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "wait_seconds": {
+          "type": "number",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "refresh_discovery": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        }
+      },
+      "outputKeys": [
+        "candidates",
+        "file",
+        "hwnd",
+        "label",
+        "matchBasis",
+        "matchedBy",
+        "note",
+        "pid",
+        "process",
+        "resolvedAs",
+        "source",
+        "title",
+        "useCount",
+        "useCountKnown",
+        "waitedMs",
+        "wasRunning"
+      ],
+      "outputClosed": true
+    },
+    "computer_paste": {
+      "parameters": {
+        "text": {
+          "type": "string",
+          "required": true,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "restore": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "require_restore": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "verify": {
+          "type": "object",
+          "required": false,
+          "properties": [
+            "automation_id",
+            "class_name",
+            "control_type",
+            "hwnd",
+            "index",
+            "name",
+            "ref"
+          ],
+          "additionalProperties": false
+        },
+        "into_hwnd": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        }
+      },
+      "outputKeys": [
+        "clipboard",
+        "eventsSent",
+        "foreground",
+        "pasteVerification",
+        "pasted",
+        "restoreNote",
+        "restoreStatus",
+        "restored",
+        "savedUser"
+      ],
+      "outputClosed": true
+    },
+    "computer_screenshot": {
+      "parameters": {
+        "window": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "require": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "display": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "all_displays": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "region": {
+          "type": "object",
+          "required": false,
+          "properties": [
+            "height",
+            "width",
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        },
+        "region_space": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "surface": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "clip": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "save_path": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "scale": {
+          "type": "number",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "format": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "captures": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "max_captures": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "delay_seconds": {
+          "type": "number",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "settle_ms": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "stability_ms": {
+          "type": "number",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "stable": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        }
+      },
+      "outputKeys": [
+        "activeWindow",
+        "afterLastWrite",
+        "attachment",
+        "bytes",
+        "captureSpanMs",
+        "clipped",
+        "crop",
+        "cursor",
+        "displays",
+        "format",
+        "frame",
+        "frames",
+        "height",
+        "image",
+        "imageHeight",
+        "imageWidth",
+        "note",
+        "omitted",
+        "ownerHwnd",
+        "path",
+        "related",
+        "relation",
+        "reused",
+        "scale",
+        "scaleEffective",
+        "scaleNote",
+        "scaleRequested",
+        "settledMs",
+        "source",
+        "stability",
+        "stable",
+        "surface",
+        "surfaceKind",
+        "timing",
+        "unchanged",
+        "units",
+        "verification",
+        "width",
+        "window",
+        "windowHwnd",
+        "windowRect",
+        "windowTitle",
+        "x",
+        "y",
+        "zRank",
+        "zRankKnown"
+      ],
+      "outputClosed": true
+    },
+    "computer_scroll": {
+      "parameters": {
+        "direction": {
+          "type": "string",
+          "required": true,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "clicks": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "x": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "y": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "from_frame": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "allow_activate": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "verify_content": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "allow_windows": {
+          "type": "array",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        }
+      },
+      "outputKeys": [
+        "clicks",
+        "direction",
+        "frame",
+        "horizontal"
+      ],
+      "outputClosed": true
+    },
+    "computer_stop": {
+      "parameters": {
+        "release_input": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "disable_capability": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        }
+      },
+      "outputKeys": [
+        "cancelled",
+        "count",
+        "disabled",
+        "note",
+        "releaseConfirmed",
+        "releaseError",
+        "released"
+      ],
+      "outputClosed": true
+    },
+    "computer_type": {
+      "parameters": {
+        "text": {
+          "type": "string",
+          "required": true,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "into_hwnd": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        }
+      },
+      "outputKeys": [
+        "foreground",
+        "typed"
+      ],
+      "outputClosed": true
+    },
+    "computer_ui": {
+      "parameters": {
+        "hwnd": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "filter": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "name": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "control_type": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "automation_id": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "max_depth": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "max_nodes": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "max_visited": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "patterns": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "skip_empty": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "compact": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "skip_if_degraded": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "since": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "prune": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "screenshot": {
+          "type": "boolean",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "save_path": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "scale": {
+          "type": "number",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "format": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "settle_ms": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "text": {
+          "type": "object",
+          "required": false,
+          "properties": [
+            "document",
+            "focused",
+            "selected",
+            "selection"
+          ],
+          "additionalProperties": false
+        },
+        "text_target": {
+          "type": "object",
+          "required": false,
+          "properties": [
+            "automation_id",
+            "class_name",
+            "control_type",
+            "hwnd",
+            "index",
+            "name",
+            "ref"
+          ],
+          "additionalProperties": false
+        },
+        "max_text_chars": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "max_selected": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "captures": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "max_captures": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        }
+      },
+      "outputKeys": [
+        "cachePatterns",
+        "delta",
+        "digest",
+        "frames",
+        "legacy",
+        "mode",
+        "nodes",
+        "note",
+        "omitted",
+        "pruned",
+        "pushdown",
+        "reinit",
+        "searched",
+        "settledMs",
+        "shot",
+        "skipped",
+        "snapshot",
+        "text",
+        "traversal",
+        "truncated",
+        "unchanged",
+        "walked",
+        "window"
+      ],
+      "outputClosed": true
+    },
+    "computer_ui_action": {
+      "parameters": {
+        "action": {
+          "type": "string",
+          "required": true,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "hwnd": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "ref": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "automation_id": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "name": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "control_type": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "class_name": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "index": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "value": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "text": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "prefix": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "suffix": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "selection_type": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        }
+      },
+      "outputKeys": [
+        "action",
+        "drift",
+        "matched",
+        "rect",
+        "ref",
+        "reresolved",
+        "resolvedVia",
+        "truncated",
+        "value",
+        "verified"
+      ],
+      "outputClosed": true
+    },
+    "computer_windows": {
+      "parameters": {
+        "filter": {
+          "type": "string",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        },
+        "focus_hwnd": {
+          "type": "integer",
+          "required": false,
+          "properties": null,
+          "additionalProperties": null
+        }
+      },
+      "outputKeys": [
+        "focusNote",
+        "focusSucceeded",
+        "focused",
+        "focusedWindowVisible",
+        "foreground",
+        "windows"
+      ],
+      "outputClosed": true
+    }
+  },
+  "files": [
+    {
+      "path": ".gitignore",
+      "bytes": 386,
+      "sha256": "e893033cc26e71af437893a1de6201882952d9bb085332e3c62dac259e71f15e"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "bytes": 48821,
+      "sha256": "3080665d8bd235905c493cf9964de96ffe725cc9012eef1a6ec0add6cb59391f"
+    },
+    {
+      "path": "INSTALL.md",
+      "bytes": 20840,
+      "sha256": "728a152f7ab1c1913a7c1b630f332b7fb5f209ae475309428831ed0dfd09f810"
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 1063,
+      "sha256": "e7d16fe03f24a8692d73ad678c1987b2280fddc84b98e4d2619a0e733c940ab4"
+    },
+    {
+      "path": "README.md",
+      "bytes": 17766,
+      "sha256": "25e2b68e0fdbcb4f9145ede7e1b6bcf1b372c05f78658c047e5ca8b53a3c6bf2"
+    },
+    {
+      "path": "VERIFICATION.md",
+      "bytes": 7229,
+      "sha256": "9940e9e8e6311c367c8d2548d4605e1889195bddccbf2ec453af94ad19576622"
+    },
+    {
+      "path": "action-catalog-test.mjs",
+      "bytes": 11688,
+      "sha256": "3b979aba44d9736492147b10ed1f1a4401f55eea240373de65d7ffd416fcc1ff"
+    },
+    {
+      "path": "app-candidates-test.mjs",
+      "bytes": 12022,
+      "sha256": "2539eb08a950f93def3120ca98f003f2a695b4f8978f5de95bd6233581de532c"
+    },
+    {
+      "path": "assets/character/drag.png",
+      "bytes": 2330964,
+      "sha256": "13835b81b7f38709b1184eee9c92e3d4a53e36fc238b2719aeb680a2b7d774c9"
+    },
+    {
+      "path": "assets/character/eat_loop.png",
+      "bytes": 2307646,
+      "sha256": "a881f525ef1899d1f82fe9144fed634cdcea0a7f650e25da106e7caafe1843c9"
+    },
+    {
+      "path": "assets/character/idle.png",
+      "bytes": 2348035,
+      "sha256": "5c4bc4766218c541581a654e80851a81c96593611e7f95b9356cf4192c0f088f"
+    },
+    {
+      "path": "assets/character/move.png",
+      "bytes": 2263004,
+      "sha256": "6a66149e94ac86d38310fc572a696684cf4fba4ccfc50f0dea536db063f2c20f"
+    },
+    {
+      "path": "assets/character/pack.json",
+      "bytes": 3276,
+      "sha256": "42d8893788a184bdfb827b414c661f47911671dd88c0692cd336f952e98af244"
+    },
+    {
+      "path": "assets/character/press_in.png",
+      "bytes": 2257965,
+      "sha256": "52b5d27e3fe18e90029cc8755ba085a7736bccade14cabbb0c47ebbee3eb70fa"
+    },
+    {
+      "path": "assets/character/pressed_hold.png",
+      "bytes": 316335,
+      "sha256": "cb5290c76304ab07eb22bf12b47d392cfb0663ae965d24ef4ee0a643f3c193cf"
+    },
+    {
+      "path": "assets/character/release.png",
+      "bytes": 2260719,
+      "sha256": "a64e23b5bc613b09752cb6197bb3924d5cd7ebb581339a593713c65550461674"
+    },
+    {
+      "path": "attachment-state-test.mjs",
+      "bytes": 4726,
+      "sha256": "862f733266ec4b034a5891ecb52c0b06eaeac992bcf1e7d2f231a7b393ad37cb"
+    },
+    {
+      "path": "backend/bridge.js",
+      "bytes": 49867,
+      "sha256": "f251a8d9646f5f9fd65b05657f31c03f2e8dde82a50dbced4998b508d105d2c1"
+    },
+    {
+      "path": "backend/parts/00-preamble.ps1",
+      "bytes": 1442,
+      "sha256": "74948c090a36977111cf75ec1282fd74d71e6afa14604ba494385afc2ad0950d"
+    },
+    {
+      "path": "backend/parts/01-cancellation.ps1",
+      "bytes": 7483,
+      "sha256": "47bd8f187edfe3bfde39552805c831fecff2860f9102f77e22f60915f92661c8"
+    },
+    {
+      "path": "backend/parts/02-native-code.ps1",
+      "bytes": 22504,
+      "sha256": "c521395c2baa6620d307c766bd1a4c562886064463f5fcdf99440ee98a9531e4"
+    },
+    {
+      "path": "backend/parts/03-com-uia-engine.ps1",
+      "bytes": 104836,
+      "sha256": "82e3ba94b54fcca330a8b538ffaf5a4612e74ef982598caffc4ea4d1c3b63c48"
+    },
+    {
+      "path": "backend/parts/04-utilities.ps1",
+      "bytes": 1732,
+      "sha256": "7faa8956fa7941c55af9a10e577ddf642220c2787434008044f1b52ecfd9c91f"
+    },
+    {
+      "path": "backend/parts/05-input-state.ps1",
+      "bytes": 47770,
+      "sha256": "4b7ccdf81d93be8e10e917b35deb56fc39a77f76bb0ba57b3d3c7363ebb988cc"
+    },
+    {
+      "path": "backend/parts/06-related-capture.ps1",
+      "bytes": 51227,
+      "sha256": "262f983fabe3da341392a0cae86a94c3df6075b1e8f7874dd6239eed890004b7"
+    },
+    {
+      "path": "backend/parts/07-frames.ps1",
+      "bytes": 129909,
+      "sha256": "c6a658b4dd0a45aa5628769a4a3965e1a5d084fe027515969226ca04928f3499"
+    },
+    {
+      "path": "backend/parts/08-element-refs.ps1",
+      "bytes": 6477,
+      "sha256": "8faac7c73983947f5bcd212d459681115e3a8dbb03775b2f1d80e98ffcfb023f"
+    },
+    {
+      "path": "backend/parts/09-what-the-model-reads.ps1",
+      "bytes": 22403,
+      "sha256": "4eda2dd2986b34a88ff6d0f4ecf48c4bcdefadca924f213bf1960683712ec937"
+    },
+    {
+      "path": "backend/parts/10-text-observation.ps1",
+      "bytes": 106646,
+      "sha256": "cb539ac23d6cab5c7b0d1d4c609d9be5918b33055bed359cfca431c28464389b"
+    },
+    {
+      "path": "backend/parts/11-waiting.ps1",
+      "bytes": 45572,
+      "sha256": "621f2eac969399e9e47b22b60a6475c44c623b60d3b611c3ef7a566b4685621c"
+    },
+    {
+      "path": "backend/parts/12-batching.ps1",
+      "bytes": 74335,
+      "sha256": "77a0ae49078140bc680712c47398981f277de49b28bd3f2ac63cb83d526f67c3"
+    },
+    {
+      "path": "backend/parts/13-main-loop.ps1",
+      "bytes": 33632,
+      "sha256": "5ad0d919699f3a484704865babf579e6a73fe6659e665acd026cc392dfe7a182"
+    },
+    {
+      "path": "backend/release-input.ps1",
+      "bytes": 6820,
+      "sha256": "416278de2df541f17dda71cce806a0810e0f64bfc4298678c4c901722ecda60f"
+    },
+    {
+      "path": "backend/supervisor.mjs",
+      "bytes": 10900,
+      "sha256": "9a85fc431a4827826cdef6701776bffcc945a0bdbb402ce857389719a50babf7"
+    },
+    {
+      "path": "backend/worker.ps1",
+      "bytes": 655968,
+      "sha256": "24c7e6cde107f808d8ddb6fb5e05e9630754fee60efc39e2680f4939aac10db5"
+    },
+    {
+      "path": "batch-progress-test.mjs",
+      "bytes": 8154,
+      "sha256": "949541d36070d0f091c6b3f5999830c09bcb069fca4a7d42d429bb219bd74782"
+    },
+    {
+      "path": "bench.mjs",
+      "bytes": 6576,
+      "sha256": "cf8cb9de4238ccc856438aa8492fe7d292931a945346d3cdacbaeb81484a4f2b"
+    },
+    {
+      "path": "browser-actions-test.mjs",
+      "bytes": 19673,
+      "sha256": "4cb53160839ccf0389f8f2b74c2cd48ae3431169b871b78ae57e581cae8e1c9a"
+    },
+    {
+      "path": "browser-connection-test.mjs",
+      "bytes": 28960,
+      "sha256": "43645e7a5338bac54e6a60bc59d42da20102c02e85f7dbdc7f55a278ff7b0583"
+    },
+    {
+      "path": "browser-contract-test.mjs",
+      "bytes": 7448,
+      "sha256": "9224273d943e76194c3bab97dd895986571f482e1137e0b7b2488bd2031fb759"
+    },
+    {
+      "path": "browser-state-test.mjs",
+      "bytes": 21552,
+      "sha256": "cacb44a1b0e738d54c72c43598e64a1288056fd82eb55925f15dec794fb9149d"
+    },
+    {
+      "path": "browser/actions.mjs",
+      "bytes": 45254,
+      "sha256": "8165a07a8f28048952bc51dca0820405e23e50b6fca639d966d937c32838a5c5"
+    },
+    {
+      "path": "browser/connection.mjs",
+      "bytes": 25826,
+      "sha256": "8cad531d77a11704e9040b96cbca72a8147734760bd7ae876b3de2bf3311da94"
+    },
+    {
+      "path": "browser/state.mjs",
+      "bytes": 16146,
+      "sha256": "b436a4f1b1897947fe001a004903121f13911252384f617b5ce7cd62d3b788fb"
+    },
+    {
+      "path": "build-cache-test.mjs",
+      "bytes": 10101,
+      "sha256": "d04ec6f3e52524b9b4b0fae155e16736d32c233792888fb6f09c0b699c60ab66"
+    },
+    {
+      "path": "capture-exclusion-test.mjs",
+      "bytes": 6482,
+      "sha256": "f38c17c59f4236162764896bbae8258c213974f48d1503e65074aebe3b1f4357"
+    },
+    {
+      "path": "capture-format-probe.ps1",
+      "bytes": 3699,
+      "sha256": "71c2c24dbd002eeb846a5b65bd3bb0b0d10f944ac036e08be19916e654751e55"
+    },
+    {
+      "path": "capture-with-overlay-test.mjs",
+      "bytes": 8554,
+      "sha256": "99852728a1f07836f2ba40191718a299bd778e1c81e919932c200fc47b2a372a"
+    },
+    {
+      "path": "character-pack-test.mjs",
+      "bytes": 4534,
+      "sha256": "2f39c87b7899b5481c3199a6ce692ced69ec230412580335eacb7096eaf4e9da"
+    },
+    {
+      "path": "cleanup-test-windows.mjs",
+      "bytes": 1992,
+      "sha256": "02dcb7af7d3bfb1a753085c2fa24fad28bd090d7af9c81acd4df79a61811635d"
+    },
+    {
+      "path": "client-effects-test.mjs",
+      "bytes": 3902,
+      "sha256": "9f3baa79a3485b98aceca9470df6bf4aa26d5607b92d05fe59e8439428663d22"
+    },
+    {
+      "path": "client-panel-render-test.mjs",
+      "bytes": 10410,
+      "sha256": "a96c9e6512eb8df664fe85f8a0cc2697beaab2410038c5150b9f764f163a173a"
+    },
+    {
+      "path": "client-smoke.mjs",
+      "bytes": 28535,
+      "sha256": "ff7861bccd791ec4ab6990d6a5cf400d6345c1ae79b8675ded20652c2b8a261a"
+    },
+    {
+      "path": "client.js",
+      "bytes": 36902,
+      "sha256": "cf0d4cace21f5c505f6fad8df1720be5d1fdf3fefa7e176b6bf84399fac9409d"
+    },
+    {
+      "path": "com-scope-test.mjs",
+      "bytes": 7046,
+      "sha256": "e5d959209e0521e95bc47b3ad214b496939cf2c32253dbeca67bddd3ff64af33"
+    },
+    {
+      "path": "compile-check.ps1",
+      "bytes": 2436,
+      "sha256": "729437b0fca00f1a5d26be3a396c8fd9dfc49a723c1d84820b931698488cb751"
+    },
+    {
+      "path": "coordinate-contract-test.mjs",
+      "bytes": 53663,
+      "sha256": "54405e50a674699168b73e5ac8cb34c1d58f0f6719ec9fc06942b0acdef85abc"
+    },
+    {
+      "path": "cordis.patch.yml",
+      "bytes": 2587,
+      "sha256": "f7173ecc0834a33c9f8a5524e3a77368810af5024289526a6a07eba859cbc6e8"
+    },
+    {
+      "path": "dbg10.mjs",
+      "bytes": 1161,
+      "sha256": "d252eaaf50b14bd20fb437caf0983089d6f505d0a92fc12422edc3a768d0b48a"
+    },
+    {
+      "path": "dbg3.mjs",
+      "bytes": 588,
+      "sha256": "6d09b4b78af48ee348df6fa58b4831fe8e10cfd062308fc09c38086a1dbe3d8c"
+    },
+    {
+      "path": "dbg4.mjs",
+      "bytes": 612,
+      "sha256": "fad5f29356dc82bdadf74c9daf8eafcce31aff11d18f8c6bace5188931d43657"
+    },
+    {
+      "path": "dbg5.mjs",
+      "bytes": 653,
+      "sha256": "b1b8b5a0a89fb71aa359cf38210d78c8097fc465ae927ac42d4b64fc73434ee2"
+    },
+    {
+      "path": "dbg6.mjs",
+      "bytes": 792,
+      "sha256": "b68c0bb1d837f0219dbf3ca33a6ba0e58eae37f8c128586067bf8fd1874c2698"
+    },
+    {
+      "path": "dbg7.mjs",
+      "bytes": 874,
+      "sha256": "4b2fa09606548bdf900f3096597bece66ad468b16734164454d613b4c405c2ea"
+    },
+    {
+      "path": "dbg8.mjs",
+      "bytes": 955,
+      "sha256": "4dffb619d7b5ab653cea4c4eb6e5cebbe87131aa8d91ba1afea53d8e60e62ec9"
+    },
+    {
+      "path": "dbg9.mjs",
+      "bytes": 893,
+      "sha256": "03f1c8f7299362b89d9ab75c68dbf84630e292caba12aea2b834373e815a687c"
+    },
+    {
+      "path": "deadline-test.mjs",
+      "bytes": 8392,
+      "sha256": "544ce9b03da4c1e3eaa1a9ebb63318eb66edc8b4ad1328b427cdb655272528be"
+    },
+    {
+      "path": "degraded-bootstrap-test.mjs",
+      "bytes": 3376,
+      "sha256": "c3dd96bd86e8dc8f56624b68a877f1f9aa9a2bc447ce98355162f5527d46e7a3"
+    },
+    {
+      "path": "diag-browser-ab.mjs",
+      "bytes": 1970,
+      "sha256": "72174bf2ce45a3564654d2742ac34706cfebd23ced098a522de0984927724b11"
+    },
+    {
+      "path": "diag-capture-paths.mjs",
+      "bytes": 4047,
+      "sha256": "9557c933209f56a6b6c863143d35f426fc0f4fdb72c359c735303b65c363a207"
+    },
+    {
+      "path": "diag-codes.mjs",
+      "bytes": 2987,
+      "sha256": "651bccb0d426e2b017d25da2d78a55e1df2bfba3dd4806b7699492f12340091a"
+    },
+    {
+      "path": "diag-delta.mjs",
+      "bytes": 2718,
+      "sha256": "9f545026858c2c2d0459cef49ed410e6924cdc942f111562f337276f64cf7be5"
+    },
+    {
+      "path": "diag-delta2.mjs",
+      "bytes": 1772,
+      "sha256": "9f9cf2a773ba1797a5c7416e536cb0dcaaadeeb6acef6988db525868792269a0"
+    },
+    {
+      "path": "diag-delta3.mjs",
+      "bytes": 1703,
+      "sha256": "3ebeaa745f30db02ce2f1aa541c4ee4f855d159bd0f408a5f9eef386fe0088ed"
+    },
+    {
+      "path": "diag-depth.mjs",
+      "bytes": 2657,
+      "sha256": "ab90b58b4217f334b3f4ee71c775f4b19a9b75429b8b3696f901a7b6035e7663"
+    },
+    {
+      "path": "diag-detach.mjs",
+      "bytes": 1702,
+      "sha256": "da7005ad6fa6421b0e494abc4b7fdd6fb869088cef889442b2594cf0361877b8"
+    },
+    {
+      "path": "diag-engine-correct.mjs",
+      "bytes": 3770,
+      "sha256": "b242f56794c46a82271445d6860abcd92a58a63cbb98d7114d540de6341029a5"
+    },
+    {
+      "path": "diag-engine-explorer.mjs",
+      "bytes": 3533,
+      "sha256": "7717f20920481547836c09b3d21570cead4079518f1ff7c1ed0e9fb4c190b13e"
+    },
+    {
+      "path": "diag-find-diff.mjs",
+      "bytes": 1722,
+      "sha256": "831cb5d63557cd1bd2ac01489ff682b96d9489433aff4fcf6de498b5fefbd617"
+    },
+    {
+      "path": "diag-frame2.mjs",
+      "bytes": 3363,
+      "sha256": "92ee345b5aa770592fba365f158c6e99c7978afe7392944e51a20ece5b9f8b8a"
+    },
+    {
+      "path": "diag-input-state.mjs",
+      "bytes": 973,
+      "sha256": "f209c0120f1f8d3e94b2d25cb4e4910c006e15658d76f7977d37803eca8238b8"
+    },
+    {
+      "path": "diag-matrix.mjs",
+      "bytes": 3340,
+      "sha256": "1ef8e087b2edfda5611ee6d735674139e8546b9183fdd014e47280c225d0f683"
+    },
+    {
+      "path": "diag-notepad.mjs",
+      "bytes": 2083,
+      "sha256": "dcdeea1a0653b576b9aafc6a719b82de48a29891e395e47fa1f42d60af9d2cc7"
+    },
+    {
+      "path": "diag-partial.mjs",
+      "bytes": 3060,
+      "sha256": "2513f42108d7e732a2aac3cd3b45acc3e8f32a258dab2b5494d8abafb12de984"
+    },
+    {
+      "path": "diag-patterns.mjs",
+      "bytes": 4143,
+      "sha256": "982bc171d2203f6e650f7e629a3113a21ed7e339da443fc8fcf7437429ee6ced"
+    },
+    {
+      "path": "diag-prune.mjs",
+      "bytes": 2746,
+      "sha256": "3f814b34d482d7ab0a044408f14a1cb409a06d03e9e87c4546d5d12ce06a8303"
+    },
+    {
+      "path": "diag-prune2.mjs",
+      "bytes": 1957,
+      "sha256": "1221faac093820c2542a22e50452d16f947a60fc8db35c7cc3ce51ac1b83fd3d"
+    },
+    {
+      "path": "diag-ref.mjs",
+      "bytes": 2669,
+      "sha256": "f9d5afe00820423b10b958b65fa22b27ab14aa7437c09f9c65a1238e85abb521"
+    },
+    {
+      "path": "diag-refusal.mjs",
+      "bytes": 2032,
+      "sha256": "abc598ef078f60c6c316c41a90f5cfb7040e27d59c576cd04d49120dcc545123"
+    },
+    {
+      "path": "diag-shaping-real.mjs",
+      "bytes": 1807,
+      "sha256": "870bd710d7eaec62416642ad04fcd93aab0f73ff072ce8d4b31860486549e0d2"
+    },
+    {
+      "path": "diag-shaping.mjs",
+      "bytes": 3747,
+      "sha256": "68d8b1a5be64b652bdb88a0a4e331c29d5ab03cedc3ba969afef045b0956f82b"
+    },
+    {
+      "path": "diag-surface.mjs",
+      "bytes": 2820,
+      "sha256": "b2a15bbbdcc39ef80ed0b34f2592bd1bff66119e9d0a3a5753d1c6f2029f8127"
+    },
+    {
+      "path": "diag-tool-vs-bridge.mjs",
+      "bytes": 3866,
+      "sha256": "7b54fcb773d806bb1c2431201baf779784198b66dddacc961f9eb0d36647e032"
+    },
+    {
+      "path": "diag-tree-diff.mjs",
+      "bytes": 2259,
+      "sha256": "4b9580db2d65349977c6852403f373dfeb850bad4b5e8714713693efe485f937"
+    },
+    {
+      "path": "diag-uia.mjs",
+      "bytes": 7492,
+      "sha256": "1cb345dca46dda7f17b4dc5d2987412002d9ea16e7c9b015b29bdfea1d0f4cb3"
+    },
+    {
+      "path": "diag-window-capture.mjs",
+      "bytes": 4241,
+      "sha256": "7641e209e3d1b971249df21769f1129db1faf5d64f9c7921bf053a7410bb0dbe"
+    },
+    {
+      "path": "docs/browser-actions.md",
+      "bytes": 3286,
+      "sha256": "cb877a040ba1ad5a629d36551ce9cc59241ccca232f6611e3acabbc9e595d4b0"
+    },
+    {
+      "path": "docs/indicator-helper-protocol.md",
+      "bytes": 8282,
+      "sha256": "3713398341cdc47b9fb7689c6acc07063bba6ff3ebddedf0007bafd8681d8035"
+    },
+    {
+      "path": "docs/indicator-o0.md",
+      "bytes": 1751,
+      "sha256": "cbd4bd16eca4a921929d10a0f47d90c3f96877a9583460647639a2669428ea06"
+    },
+    {
+      "path": "doctor.mjs",
+      "bytes": 15521,
+      "sha256": "5c949701573ec915d36f5bb8f4f9d77f8c1635d826d9e84a810307c10f8ee64d"
+    },
+    {
+      "path": "drag-continue-test.mjs",
+      "bytes": 5793,
+      "sha256": "9da2b9d4482cdf74b92c39e413e855a5703a98c33bba41ef65c1f18d6c28a5e6"
+    },
+    {
+      "path": "drag-path-test.mjs",
+      "bytes": 18205,
+      "sha256": "ab4691b337d0efa3198e980eaae43127847e7a77700e89696924db7efb1af4ec"
+    },
+    {
+      "path": "engine-ab.mjs",
+      "bytes": 15663,
+      "sha256": "d2e207c64ba4dd60dfb08a1409ef723d23b2136d6748aaf717872835b09efc06"
+    },
+    {
+      "path": "exit-waiter-test.mjs",
+      "bytes": 6090,
+      "sha256": "389cefd8487f777ee7d82acbdad5e540b59f6ecc93a3d8c812d9814b316dfec7"
+    },
+    {
+      "path": "fix-profile-links.cmd",
+      "bytes": 1356,
+      "sha256": "d502565f505e48b96cd43e4e7593768f870cf2efde786ec56d17f64343c0c53b"
+    },
+    {
+      "path": "grant-isolation-test.mjs",
+      "bytes": 11239,
+      "sha256": "fca6e646e282e6c7b17de207c595afed97bcb00f4774edcff9089e57325297dd"
+    },
+    {
+      "path": "harness-test.mjs",
+      "bytes": 36037,
+      "sha256": "261becb01f50702d424150457faa573aeafce01e58cfb27e0ba6546dd246e4e7"
+    },
+    {
+      "path": "host-contract-test.mjs",
+      "bytes": 9168,
+      "sha256": "114f88479305e334da6db9a96a6cc6ca968d9b9848d602d537e98005cc9929ad"
+    },
+    {
+      "path": "host-runtime-test.mjs",
+      "bytes": 12677,
+      "sha256": "2f9dd4b5f9f308538c7128905b973dd9ee7ca6268206f2d1ed4acb1aaffee9be"
+    },
+    {
+      "path": "index.js",
+      "bytes": 286478,
+      "sha256": "6b4f4655ce05bdd9fcc0f1eec77d82bd5e01229da3e96f6e4448461bb1bc9d02"
+    },
+    {
+      "path": "indicator-helper-test.mjs",
+      "bytes": 14567,
+      "sha256": "07e3c2b9fb0803859a5833a1017fb503398acba754edcf70c6cbff842e8e3b8a"
+    },
+    {
+      "path": "indicator-integration-test.mjs",
+      "bytes": 8300,
+      "sha256": "85c685637ee11a31a291726858b3a862b612bd16d9be9b9fe987e952c7fbbfb8"
+    },
+    {
+      "path": "indicator-supervisor-test.mjs",
+      "bytes": 9544,
+      "sha256": "4b4b60895e078a969d2be5979c5f0bd3e49b4fee092241fb7d35fe4de67061be"
+    },
+    {
+      "path": "install-and-repair.cmd",
+      "bytes": 1449,
+      "sha256": "a7180314d3dad4ec1816211d9f3eb8bae17115c16e93802e013417b4b91bf1e6"
+    },
+    {
+      "path": "interaction/indicator-supervisor.mjs",
+      "bytes": 14072,
+      "sha256": "e9005802b93590d8b4ebedbcb2d127d61e4ee402e0624c7e0f341d255bdb77ab"
+    },
+    {
+      "path": "internal/actions/catalog.mjs",
+      "bytes": 11875,
+      "sha256": "38e29c2bef78e22404cfb6aeafab0df8e3afa986e0cf92f310d0aec75d7ea69b"
+    },
+    {
+      "path": "internal/actions/schemas.mjs",
+      "bytes": 13579,
+      "sha256": "800a435eac5d1e63aae49769ca27b7e435a309655250f742eff4116cf280ea61"
+    },
+    {
+      "path": "internal/admission.mjs",
+      "bytes": 2507,
+      "sha256": "039f2d771b5d42d01a02af09c0285929ce5498a08316ca6e2ed66f967eaad25b"
+    },
+    {
+      "path": "internal/app-launch.js",
+      "bytes": 17711,
+      "sha256": "bb271068650e9ad7d341128c8e9877aab4bba8c4dd4086dc58a98ef57dd24e48"
+    },
+    {
+      "path": "internal/app-launch.mjs",
+      "bytes": 12609,
+      "sha256": "8e7d94fe597d62f026405c019632457e4b9ea7010921423d0042ca02e677ea8c"
+    },
+    {
+      "path": "internal/build-check.mjs",
+      "bytes": 5434,
+      "sha256": "ee140b221885c73bc0b448943eeeccfc01dd7b1ccc5c90ea670217f6e0f2d7b1"
+    },
+    {
+      "path": "internal/capture-exclusion.mjs",
+      "bytes": 4379,
+      "sha256": "d75d71b1445783952a5fd6e0ff12aa7337dc2be77bb4ad0e1635884823c78189"
+    },
+    {
+      "path": "internal/capture.mjs",
+      "bytes": 23082,
+      "sha256": "744648e9ed446893b621b3119eb266de40ac60b6b957a89524d5d10cdd713b1c"
+    },
+    {
+      "path": "internal/degraded.mjs",
+      "bytes": 3623,
+      "sha256": "fdcb7e2318850aabdb7b0ce6b25cbd563630b72adbc7a763d02404e1900ba153"
+    },
+    {
+      "path": "internal/diagnostic-report.mjs",
+      "bytes": 7181,
+      "sha256": "ddb0eda856e0915c30c3f93ff37f8a08d3a5940e8b901f899fb389a8a0250f55"
+    },
+    {
+      "path": "internal/doctor.mjs",
+      "bytes": 24330,
+      "sha256": "45800bc3376fe8cb302085092dcd089ed5cbbaed46afc90edb41f8944f3bd351"
+    },
+    {
+      "path": "internal/execution.mjs",
+      "bytes": 7754,
+      "sha256": "e8ba8b71fd0a24a377b4205e2633d8038f14ef1016c58d5c92bd8a3be8b85cd7"
+    },
+    {
+      "path": "internal/failures.mjs",
+      "bytes": 24126,
+      "sha256": "8e220db472f88bc05f449c25416198e064f5b506d7e01b20f1213d3e54f41503"
+    },
+    {
+      "path": "internal/generation.mjs",
+      "bytes": 3652,
+      "sha256": "e90ea9ee3e349174c5c2877666ec9d246735b467ceb278925f4ee01c5125fc46"
+    },
+    {
+      "path": "internal/host-packages.mjs",
+      "bytes": 19239,
+      "sha256": "14b39e23ac79e2ebfb83024b038c1e3540e1f3050a762a83d0218f2c400524e3"
+    },
+    {
+      "path": "internal/instance-registry.mjs",
+      "bytes": 5810,
+      "sha256": "901710874b017d3927902ec8c5f72ab3f3951a2176f14da9f9fa07647f2d99cf"
+    },
+    {
+      "path": "internal/lease.mjs",
+      "bytes": 5983,
+      "sha256": "1468bd25e711cbd51fee5f4dcedd44e70d5cd55092ff5f0ad5ba926f3536ea6e"
+    },
+    {
+      "path": "internal/powershell.mjs",
+      "bytes": 6541,
+      "sha256": "55d79b56382fbe46dac0a58bbddb62d114aac2f3b12b18b35145d6551675edc0"
+    },
+    {
+      "path": "internal/preflight.mjs",
+      "bytes": 11958,
+      "sha256": "f1e8398ad4de8b0bbb861b3e9520f07c6435b4d615a71464d0b7e194d698d96f"
+    },
+    {
+      "path": "internal/profile-check.mjs",
+      "bytes": 12347,
+      "sha256": "dd43d3ac5ab48aaa77132a2b16b670d096c2006caa014195e3adc25254215bde"
+    },
+    {
+      "path": "internal/receipt.mjs",
+      "bytes": 8233,
+      "sha256": "c4a5a3305e0656ab0a2f1b0ea463bbc0fd59bd235c33ae46d35274f24eab84ea"
+    },
+    {
+      "path": "internal/refs.mjs",
+      "bytes": 7401,
+      "sha256": "e9dae456c68f56acdc68a658ec57fc1563775ef105a94e07cb8704c87aeb3a0e"
+    },
+    {
+      "path": "internal/release-manifest.mjs",
+      "bytes": 17889,
+      "sha256": "3363040e32a9da872e8432705888162194cfec42058b3d7ea7827ad1e82e3836"
+    },
+    {
+      "path": "internal/schema-visibility.mjs",
+      "bytes": 14620,
+      "sha256": "0031cbb9178f30290c25e87b187dbcb3403ca112d7cfa0e940e8c67c46c1431f"
+    },
+    {
+      "path": "internal/security-block.mjs",
+      "bytes": 8156,
+      "sha256": "c5fcf695189a244f8264bf3e13d023c36e93d3f12a8085af38c1a770a903ab2a"
+    },
+    {
+      "path": "internal/sessions.mjs",
+      "bytes": 3358,
+      "sha256": "1baed14d31fa30aec43a9db8487cdd955e78215428ba5fd73fcbf36da87e339f"
+    },
+    {
+      "path": "internal/summarize.js",
+      "bytes": 14021,
+      "sha256": "34624c9eaf88128afc9803a98f9adc128a721aca4d04aa6baff0641874e44e7c"
+    },
+    {
+      "path": "internal/token-guard.mjs",
+      "bytes": 13371,
+      "sha256": "7801da2ddd578937f8c3fbde9cf21aa79ce7659ee15f091737acc8d789d47c46"
+    },
+    {
+      "path": "internal/tool-contracts.mjs",
+      "bytes": 81748,
+      "sha256": "a8210540d1f64873580fee0f10994930b6cdc5205911e95c8434619622a7986d"
+    },
+    {
+      "path": "internal/visual-preferences.mjs",
+      "bytes": 6821,
+      "sha256": "23ae129af1285b850c72f907c636a3935aab9dc3e64be0d6883957bb08812bd4"
+    },
+    {
+      "path": "lease-test.mjs",
+      "bytes": 6347,
+      "sha256": "405d330483bf085449f606145e99a2fd7907c98f2f35ce205f870409e32472dd"
+    },
+    {
+      "path": "lifecycle-test.mjs",
+      "bytes": 57197,
+      "sha256": "315b6ecae085b546ee16485cddda7984f4fd5391117949d565e41ed4e84ea1df"
+    },
+    {
+      "path": "live-tool-test.mjs",
+      "bytes": 114094,
+      "sha256": "55239cea6669f6f73f660ed1a82640ad23f9e4a0e8e8b45168104d6ebf742fbe"
+    },
+    {
+      "path": "managed-find-test.mjs",
+      "bytes": 10021,
+      "sha256": "84d917193ae74d87aa9f0c2bc115971854966e7f94f3f2444901c45464569a5b"
+    },
+    {
+      "path": "merge-mount-test.mjs",
+      "bytes": 4847,
+      "sha256": "5e3dd72e0c64dd2fedcad62a0ce87b87ac57e39a3c679295567617dc7f8f0311"
+    },
+    {
+      "path": "migration-drill-test.mjs",
+      "bytes": 6665,
+      "sha256": "8d98279d961089e078bdb2d82572943a980e5355e07b934fe49c12ca5bb57ad3"
+    },
+    {
+      "path": "multi-capture-test.mjs",
+      "bytes": 18974,
+      "sha256": "0365c6ae09ba4426cefc06c313bd05d91969b1732a28e498ddcfe33d1d482381"
+    },
+    {
+      "path": "native-indicator-test.mjs",
+      "bytes": 10317,
+      "sha256": "ec1cfc5d30ab515095b9614b94e3df251209daa42348b1069e3c3641c71bb4ed"
+    },
+    {
+      "path": "native/indicator-helper/build.ps1",
+      "bytes": 1368,
+      "sha256": "48b4702e7542e28e44ce3cc28c61686f43b9ba92371d35138c81fbb3bc1e1126"
+    },
+    {
+      "path": "native/indicator-helper/character.h",
+      "bytes": 18258,
+      "sha256": "037fd2afb74257bd4ee82c8c7db3f90a00c401107d9facac4d8bbf8984199f34"
+    },
+    {
+      "path": "native/indicator-helper/main.cpp",
+      "bytes": 60807,
+      "sha256": "585cf94a3bcd864315fc815a09398b05c3bda4664ab4c6bbd2c29d60dcd85597"
+    },
+    {
+      "path": "native/indicator-helper/preview.mjs",
+      "bytes": 2028,
+      "sha256": "dbfadf94aaff3e8040bb7ddedc15b364c2ce9b729f4acc12b4796e81cbc3182c"
+    },
+    {
+      "path": "native/indicator-probe/build.ps1",
+      "bytes": 1480,
+      "sha256": "815218085913d26fdb45f7e274c5e3b1a049abbf20d2a99c83f47fe6a45ec5c5"
+    },
+    {
+      "path": "native/indicator-probe/main.cpp",
+      "bytes": 29014,
+      "sha256": "f42912526d94049b3cc7b5483bfe9b18397c90e28b96cdc96d88381ccdee68c9"
+    },
+    {
+      "path": "pacing-test.mjs",
+      "bytes": 33146,
+      "sha256": "2b2460d39379d1f02f71db8d654105ca79ce395d2f54b2d585912a9cffedb61f"
+    },
+    {
+      "path": "package.json",
+      "bytes": 3416,
+      "sha256": "6d84f1a51243e8aa9aa2b24989919a1239cf9eba5532425470e8895b89d7a3ab"
+    },
+    {
+      "path": "paste-restore-test.mjs",
+      "bytes": 20079,
+      "sha256": "ded4d19c4c67c78c421523c0319bbe20cbdbbc3923270eff837afbc901dfdfbd"
+    },
+    {
+      "path": "presets/README.md",
+      "bytes": 1888,
+      "sha256": "f9e15405e5fa7af8e3e27e7fb4089651bce112d5d6435ff108737677c263f6bd"
+    },
+    {
+      "path": "presets/cordis.patch.yml",
+      "bytes": 9775,
+      "sha256": "e47a10ef29d0f24ab51139bbd248cb07a645d169b37b17ef4d1d5f303f1d334d"
+    },
+    {
+      "path": "presets/package.json",
+      "bytes": 720,
+      "sha256": "361889bb9ec09ee85971dce2fe11ec2bb4f0db2f1a1ccfd378984977c83c081a"
+    },
+    {
+      "path": "probe-launch.mjs",
+      "bytes": 1319,
+      "sha256": "f03c671f0dc9c84bb7ddf94008f0f6e98722e5a57add9b4a53cfa07f8700bdb9"
+    },
+    {
+      "path": "probe-text.mjs",
+      "bytes": 2572,
+      "sha256": "50d69ab0417a973e6f1aa3c296f4a6e9f32e3472c175bc0570e3a20d5e7ac85d"
+    },
+    {
+      "path": "probe-uia.mjs",
+      "bytes": 4789,
+      "sha256": "1571d2ac7e937817a4a8d7ec199755c08092d6038a42ecbb8b18b194598d8f85"
+    },
+    {
+      "path": "probe.mjs",
+      "bytes": 3978,
+      "sha256": "b2fd65ea193e57d9781c80e4f3c62adca482932c128580d577f5ec0e967d0f6f"
+    },
+    {
+      "path": "real-tools-probe.mjs",
+      "bytes": 8913,
+      "sha256": "4726a8fd7bb92a82fb2f3f1e27853c006da0e74fc54f0ee3f8ea20ca2769779b"
+    },
+    {
+      "path": "receipt-test.mjs",
+      "bytes": 11289,
+      "sha256": "0b98aad16c774c5c317fe0c4d27985f093928c437d2b5142ffb61c80e6fa19b9"
+    },
+    {
+      "path": "rehearsal-install-test.mjs",
+      "bytes": 8205,
+      "sha256": "d4efebac25220f29a688561e1d4394da6736b7b596e177ebebf01ee8f9cb2107"
+    },
+    {
+      "path": "release-manifest.json",
+      "bytes": 16845,
+      "sha256": "a7f0c4d3ab2e3ad6c5431996407fbaddec305cbd07e350bab4f3531b68ae2f91"
+    },
+    {
+      "path": "release-report-test.mjs",
+      "bytes": 3170,
+      "sha256": "d5a3d598c160b0e047e410f11fb4ddba1c771d49c2bf8fdd8343f1fe161a659d"
+    },
+    {
+      "path": "release-signature-test.mjs",
+      "bytes": 6357,
+      "sha256": "ad393ec24e93f59628ac231269627e12d28b3da53048b956bd9edf3c9fb8c192"
+    },
+    {
+      "path": "release-verify-test.mjs",
+      "bytes": 6652,
+      "sha256": "1015c5e850a4155895640b5d232dd78f614c3fe358ecd13950bed7a04b7e08f1"
+    },
+    {
+      "path": "rollback-drill-test.mjs",
+      "bytes": 9598,
+      "sha256": "943e6b9a6d495d42107579ecceec14a789e04cd1d96f309c681cc48554186df6"
+    },
+    {
+      "path": "schema-test.mjs",
+      "bytes": 50413,
+      "sha256": "415b704119edd0bab2c12ca893ca9dce49ef862cb0109cc23fc893808f9052d8"
+    },
+    {
+      "path": "security-block-test.mjs",
+      "bytes": 8796,
+      "sha256": "a2c978bcca92d3775aac05fef5128a18da09a881d8290a7c851690db164dd64c"
+    },
+    {
+      "path": "select-verify-test.mjs",
+      "bytes": 13148,
+      "sha256": "0d0803dadd4f437c58fcbedaf805b61799f86f3f0bce5d279b7fdc6f7396f170"
+    },
+    {
+      "path": "setup.mjs",
+      "bytes": 15532,
+      "sha256": "cf8fdb7e3ccac7d7fc14c45529df350916148b9c1525d6da222f2bc595b5c392"
+    },
+    {
+      "path": "stability-probe.mjs",
+      "bytes": 10515,
+      "sha256": "bb3904ec7d2e728f18c0c0a25a49529e9cb70d6d0c05f144fcd449b7ec8f8ec6"
+    },
+    {
+      "path": "stop-report-test.mjs",
+      "bytes": 5743,
+      "sha256": "dce229f7c1112491db18900e354d2cced4b87bbdab74611607a647c8d97479d3"
+    },
+    {
+      "path": "supervisor-test.mjs",
+      "bytes": 12574,
+      "sha256": "14476e461ad2c0a9f8087900d8f1b930bd9e5085307c3b3481851a3c23874a01"
+    },
+    {
+      "path": "survey-uia.mjs",
+      "bytes": 3097,
+      "sha256": "6ee53a4f4569ab923e5a929332a547ea5c39f89609eb3e1df8f4e576a5a5c7e0"
+    },
+    {
+      "path": "task-eval.mjs",
+      "bytes": 68821,
+      "sha256": "cf02a2e728f10d72f5c335e399ac4730b327f011b18b22a765176432fe24f2c0"
+    },
+    {
+      "path": "test-schema-visibility.mjs",
+      "bytes": 21928,
+      "sha256": "5ad0622915fc5d86c3e60843a880ecf3545d44d5836bb8f83e34d41a1bc5bf4d"
+    },
+    {
+      "path": "tests/app-launch/fixtures/env-report.mjs",
+      "bytes": 736,
+      "sha256": "0a0b22fd3e8e69dd311c0f1c1905b27f42781895a06f2086adb7b70808fe177e"
+    },
+    {
+      "path": "tests/app-launch/plugin-test.mjs",
+      "bytes": 12430,
+      "sha256": "fbb1e0fd6f339c937d843aea683f7074af733efae32e970ac08192f5926c0faa"
+    },
+    {
+      "path": "tests/bridge/fixtures/late-worker.ps1",
+      "bytes": 1239,
+      "sha256": "d5499cdd27931fc79c25a2ce34337791220c26131b556a2bfcf3b9227ad13a9b"
+    },
+    {
+      "path": "tests/bridge/fixtures/slow-worker.ps1",
+      "bytes": 484,
+      "sha256": "9e73f41a829d18988256160b2e56b5fade583f879525f40ea700571cbfbe9b4b"
+    },
+    {
+      "path": "tests/bridge/fixtures/stub-worker.ps1",
+      "bytes": 1336,
+      "sha256": "b8bf5b76bccd8e228633c61b53363556ab7cd848ace692a65680b152cbc86f97"
+    },
+    {
+      "path": "tests/bridge/plugin-test.mjs",
+      "bytes": 10755,
+      "sha256": "3f0168dc00cfab38290b6f891ebd87df6d0dfe862206c9ebf2e6b2499f6d5e53"
+    },
+    {
+      "path": "tests/fake-indicator.mjs",
+      "bytes": 5000,
+      "sha256": "41f8c0d5f8e5f6b029a89b949cc3e7a0e25325fc826a3e29b0b2e6f0e3a90b17"
+    },
+    {
+      "path": "tests/hardening-test.mjs",
+      "bytes": 15902,
+      "sha256": "f4a788d9e93f77babf16bed69f27047c4e0667fe249f9bb5e9c87a1bf5ec28f7"
+    },
+    {
+      "path": "tests/host-app.mjs",
+      "bytes": 2362,
+      "sha256": "beddab5cb0c39bd5d9cc31f899fe6e3792db65683c3eac49d8ff7626e3e3a017"
+    },
+    {
+      "path": "tests/preset-config-test.mjs",
+      "bytes": 12217,
+      "sha256": "ed5924d9fda136716d357fb6db5e4466ab4c6aba1f1a705f50bcf17805ab0bb6"
+    },
+    {
+      "path": "tests/token-guard/eval-real-results.mjs",
+      "bytes": 4591,
+      "sha256": "669ce0d2195d7b44cfb83876d7b5e656b806f594dd050590e66fb51fbab69639"
+    },
+    {
+      "path": "tests/token-guard/fixtures/pwsh-1-13-4906B.txt",
+      "bytes": 4917,
+      "sha256": "33cdd2fe7bcc69e45866f67d10cc83804f13793f5c9a75a265632b94707eafa2"
+    },
+    {
+      "path": "tests/token-guard/fixtures/pwsh-1-22-3615B.txt",
+      "bytes": 3618,
+      "sha256": "f576c9df72b44e02f00e9ee3e61d4d4358ec290f0436d20da12cee98b19ca7f2"
+    },
+    {
+      "path": "tests/token-guard/fixtures/pwsh-1-23-5451B.txt",
+      "bytes": 5507,
+      "sha256": "84b02d2882baad0791aec101a3b5c7f120878c3756191c7824df3f8968c7554d"
+    },
+    {
+      "path": "tests/token-guard/fixtures/pwsh-2-11-7097B.txt",
+      "bytes": 7100,
+      "sha256": "d67ee8ad902bed8c488f0ff413ab6ea5aae7b28dbcdb93964970355cbccdeee5"
+    },
+    {
+      "path": "tests/token-guard/fixtures/pwsh-2-5-6193B.txt",
+      "bytes": 6210,
+      "sha256": "1d470f29515fcea50f8cbd44473b03ea97ad98671caa01cb1d4dd97a1d5320a7"
+    },
+    {
+      "path": "tests/token-guard/fixtures/pwsh-5-4-34429B.txt",
+      "bytes": 34438,
+      "sha256": "bddb5e164968eb19e7a0653c2977d0edd2a87b5e1e0f9a63e54959aefd6f484a"
+    },
+    {
+      "path": "tests/token-guard/fixtures/pwsh-7-11-18617B.txt",
+      "bytes": 18639,
+      "sha256": "fb9517de4d5229cfffadd47385a6e85f9ddd0609e8727b6df11d6a451b0d073b"
+    },
+    {
+      "path": "tests/token-guard/fixtures/pwsh-7-15-5761B.txt",
+      "bytes": 5805,
+      "sha256": "c11f17c37ccabcc07815c5aa2033db72186452a1dc8b629caeb89f17776e1c56"
+    },
+    {
+      "path": "tests/token-guard/fixtures/pwsh-7-3-5962B.txt",
+      "bytes": 5977,
+      "sha256": "3453761bc8622525fa452ef68b901b303ea6348d5ff82ea307330235422b95a6"
+    },
+    {
+      "path": "tests/token-guard/fixtures/pwsh-9-3-6237B.txt",
+      "bytes": 6306,
+      "sha256": "cdaecf2a1ee00a6f68897436ad10771c5376178d39319e3bf544b628ca3498fd"
+    },
+    {
+      "path": "tests/token-guard/plugin-test.mjs",
+      "bytes": 7173,
+      "sha256": "0cf9a192e3bd9ccac790ac2d8491363823f5c64f747fe8905e60424aefff2bd6"
+    },
+    {
+      "path": "tests/token-guard/summarize-test.mjs",
+      "bytes": 8339,
+      "sha256": "fc1e401a86d8f4d3cf5bfb0cb82402f520d3d8bc4472ccbcbd6c13defc18d18e"
+    },
+    {
+      "path": "tests/workspace-dependencies-live.py",
+      "bytes": 3990,
+      "sha256": "17ec5681be95c111e76255c66643b1e887cae89641dd208f6d09f6f9e2b10bcb"
+    },
+    {
+      "path": "tests/workspace-dependencies-test.mjs",
+      "bytes": 6964,
+      "sha256": "c829cef1f33e5d0b20e8d2696d9cb8db2c4aae8c4ba8699d5826d50b8c919970"
+    },
+    {
+      "path": "text-density-test.mjs",
+      "bytes": 28211,
+      "sha256": "7ac6856c6c11428b2d250eaea8f630825362c1f46b93d46c970bf777c678b655"
+    },
+    {
+      "path": "token-guard-test.mjs",
+      "bytes": 9293,
+      "sha256": "aae9b5372962e59d436a67f095d9513a2392102d7587ad3de2c0823d0154f43b"
+    },
+    {
+      "path": "tools/baseline-snapshot.mjs",
+      "bytes": 7663,
+      "sha256": "1b0a7f9ee53f3b817fda1c05f1846b6eb94bb5e94c1dbbcc5dc1edf8179501af"
+    },
+    {
+      "path": "tools/browser-action-doc.mjs",
+      "bytes": 3554,
+      "sha256": "baa22197a993d709297092ef571b0bb150f880def6887d36a2ad5ff157caf45f"
+    },
+    {
+      "path": "tools/build-worker.mjs",
+      "bytes": 3478,
+      "sha256": "041542d335eab2cd5bd2815a2d2d731eb5e458ad873acaee4b6ce40d6e2c796f"
+    },
+    {
+      "path": "tools/capture-spec-test.ps1",
+      "bytes": 5350,
+      "sha256": "d9e3831caed67d5d019f0f91d4fe28c06780c743a88535fa070406cbe23cedf4"
+    },
+    {
+      "path": "tools/character-pack.py",
+      "bytes": 7608,
+      "sha256": "9f606d214b51538d18ee5c7aa98a12e817cad086ee97b6560ef82ddae6887758"
+    },
+    {
+      "path": "tools/check-string-literals.mjs",
+      "bytes": 2177,
+      "sha256": "3acc93204c83cbd613d7719648c166f815c68bb743f8d9cb6bc9229bcecabfc2"
+    },
+    {
+      "path": "tools/compare-declarations.mjs",
+      "bytes": 1641,
+      "sha256": "2c618f75f98aadbc17d5aec6c93bef0c2f77bbb745b70fb3df71c4836db2d49f"
+    },
+    {
+      "path": "tools/compare-functions.mjs",
+      "bytes": 3387,
+      "sha256": "aea89b7508c79d49216653ca0402290a0bb669680642553898696bbb85e18041"
+    },
+    {
+      "path": "tools/compare-soak.mjs",
+      "bytes": 4217,
+      "sha256": "b0dba98f94286bc313e6c38bde5e35f984a5963647bf182dcc431c56bf280694"
+    },
+    {
+      "path": "tools/deadline-guard-test.ps1",
+      "bytes": 4635,
+      "sha256": "16a94f7ff1b98345c8901600057f72e33319bd5f20b0630538ca44ac199d2c0d"
+    },
+    {
+      "path": "tools/desktop-probe.ps1",
+      "bytes": 4925,
+      "sha256": "6f7ba0cc08e1fe6d15735f38078c44f6b550bdde547208e083ac4484fc91979c"
+    },
+    {
+      "path": "tools/fix-contracts-exports.mjs",
+      "bytes": 1857,
+      "sha256": "d0581e46cfcd38481256d3a3f0204a5c46447e8f550b5746ec23495a66e475e8"
+    },
+    {
+      "path": "tools/fix-profile-links.ps1",
+      "bytes": 5836,
+      "sha256": "f0df84b5d0ff6cf2f21b9a95c38234d5e31fedc2d4415170d310e5200cc8669a"
+    },
+    {
+      "path": "tools/input-delivery-test.ps1",
+      "bytes": 4549,
+      "sha256": "013f3fca8ff41821633a52c6b80af1528d6999e6e6f8364744a947b90926a96b"
+    },
+    {
+      "path": "tools/interface-inventory.mjs",
+      "bytes": 6986,
+      "sha256": "c588c9f735d3fad2f4e277ec1a68175597b26a648a1aa0a36779521b04a19fb4"
+    },
+    {
+      "path": "tools/lint-undefined.mjs",
+      "bytes": 13259,
+      "sha256": "353a83096f159137c58c4cf95e121a2e5e0435e08c555bd31eac6545acf68a13"
+    },
+    {
+      "path": "tools/move-capture-module.mjs",
+      "bytes": 10636,
+      "sha256": "bd08eea97c91224924eb59a56a0005fb6aa2f9430846be7d444f4cf6c8ddf7d2"
+    },
+    {
+      "path": "tools/move-contracts-module.mjs",
+      "bytes": 8955,
+      "sha256": "c7e046735c7ee2eeb6e5df84a414aa0f7d55e0ed0b9383e019e358b87ee6c3b5"
+    },
+    {
+      "path": "tools/move-execution-module.mjs",
+      "bytes": 7765,
+      "sha256": "652e8c63ae6900269c80275f0f758823697ed3b7eb70b8c9340c5d17b393ea2a"
+    },
+    {
+      "path": "tools/move-failures-module.mjs",
+      "bytes": 5206,
+      "sha256": "ca2bdf575cb47def694d7e06064ca31939a213bb3d2bc25ff317fc6c8808b13a"
+    },
+    {
+      "path": "tools/move-refs-module.mjs",
+      "bytes": 4210,
+      "sha256": "9a9752bf2b3f5a75e68033eade84ed87eaa3def7028fedf71afc3b5a487e8071"
+    },
+    {
+      "path": "tools/pack-candidate.mjs",
+      "bytes": 14117,
+      "sha256": "9d4b2e8d840bc507368793b10d716b9794d63f427055a8b99e3a7426c3bba51e"
+    },
+    {
+      "path": "tools/parse-check.ps1",
+      "bytes": 2868,
+      "sha256": "34aac0a174f996c9ad2a85cc4487f8773a0b17ba1cc8c7badd9d08b2cb626ec4"
+    },
+    {
+      "path": "tools/probe-drag-continue.mjs",
+      "bytes": 3198,
+      "sha256": "3e2d624e21fac38543a6d53d23f63e04f5f9c531c3b3d814e5872cba7983edb6"
+    },
+    {
+      "path": "tools/probe-engine-lookup.mjs",
+      "bytes": 5313,
+      "sha256": "a2b7cab243321fbffae5cbe3ca665b039c543a0bb6ed1b9a1918d65e7b4a7b71"
+    },
+    {
+      "path": "tools/probe-window-tree.mjs",
+      "bytes": 5369,
+      "sha256": "00db1aae0bc38b6d4729086d37a79f8965851809a40b3d8fe95e0a0b47f5db28"
+    },
+    {
+      "path": "tools/publish-npm.mjs",
+      "bytes": 6421,
+      "sha256": "c4bccc782e17a98df40587af994895f587c41b5f87ea23ccb7729c20e36097c6"
+    },
+    {
+      "path": "tools/pushdown-test.ps1",
+      "bytes": 4673,
+      "sha256": "bffc6efd1e53d8f6036929dc846315b192b8624004e94432e734223628d8a8c4"
+    },
+    {
+      "path": "tools/regen-token-guard-fixtures.mjs",
+      "bytes": 4009,
+      "sha256": "f6cfcd99c70926c8df4644f0f1beb3f641a16d934e60dfda2d4adcaec3e60acd"
+    },
+    {
+      "path": "tools/release-input-test.ps1",
+      "bytes": 6330,
+      "sha256": "9545e811c410115ebd5a2c814275d5d578db7155ce3f895d226d52528958e096"
+    },
+    {
+      "path": "tools/release-report.mjs",
+      "bytes": 8956,
+      "sha256": "9a74488f7fa7d079777e45ceeeffb5513100600d3947e5393290281945a2e90f"
+    },
+    {
+      "path": "tools/release-verify.mjs",
+      "bytes": 8676,
+      "sha256": "c2dc846163877beffd1bf2c2d77fae9dcd625013d306f729ff3163dd333ee28d"
+    },
+    {
+      "path": "tools/restore-inflight-block.mjs",
+      "bytes": 3046,
+      "sha256": "322b1ff85e1f93b9c83f571647490a7cb61417ebde5094a0c8ea5ce4e8cf1521"
+    },
+    {
+      "path": "tools/schema-aggregate.mjs",
+      "bytes": 1839,
+      "sha256": "dbf245395b1fe3f559688720d0c045ebb310fdf9492e6f2f252a8660332f3ec2"
+    },
+    {
+      "path": "tools/schema-budget.mjs",
+      "bytes": 3432,
+      "sha256": "27a3f6793e871b0fd760cc2a1cf6064be942aaf1e7abd8a4b978ae4c71de897a"
+    },
+    {
+      "path": "tools/schema-fields.mjs",
+      "bytes": 2103,
+      "sha256": "cebb97d7ddd6adcb7adaf224056b0eeb7a870896da322f7cfe3593c46b0005f3"
+    },
+    {
+      "path": "tools/smoke-routes.mjs",
+      "bytes": 7399,
+      "sha256": "5a89c7e449bbbb0c3a4766d7f020aa75d688310ec0754ab7b6b2c6f57f2422ad"
+    },
+    {
+      "path": "tools/smoke-tools.mjs",
+      "bytes": 11968,
+      "sha256": "1c3544eacd929a3516275d422ec1dd97e56bd2b2b3f547aee5d11f71c088ceba"
+    },
+    {
+      "path": "tools/split-worker.mjs",
+      "bytes": 4327,
+      "sha256": "a3283b0f5ed9e01298a748c22582e837228ffd30ed0f997d9d5e30cd1eb7c6dc"
+    },
+    {
+      "path": "tools/stress-soak.mjs",
+      "bytes": 16856,
+      "sha256": "611d7cce28ee4820e6a0d0965c1fd8c73128f18d7d6461166e9c1e9b2230051f"
+    },
+    {
+      "path": "tools/task-eval.mjs",
+      "bytes": 7870,
+      "sha256": "685830ee232ce33510e8322555de2ac54312a894e3f916cb9dfa18901fdff014"
+    },
+    {
+      "path": "tools/uia-cache-test.ps1",
+      "bytes": 3337,
+      "sha256": "df2d120df2882d64e65488463cb8d87937a3d58ae64717e54fb953846e2c5423"
+    },
+    {
+      "path": "tools/uitree-spec-test.ps1",
+      "bytes": 5266,
+      "sha256": "a2e62204c94e4a34f5baaf16cc6e44cc4e6dc31ec5345888e8aa995f2d41bb58"
+    },
+    {
+      "path": "tools/verify-installed.mjs",
+      "bytes": 3499,
+      "sha256": "e5fd90d36a75a56eca4b2d20852202dedbb17bb590cbbcd29be48a10c475e22c"
+    },
+    {
+      "path": "tools/visit-budget-test.ps1",
+      "bytes": 2690,
+      "sha256": "8e3d5fc091180b15dbea434233d9d55324fa16ce143c6f91d7cbfb0dce61d9b2"
+    },
+    {
+      "path": "tools/walk-ledger-test.ps1",
+      "bytes": 3716,
+      "sha256": "60dc34870b53a82b3966044c84a2b6c3313577906fd9ab5a1b3be075a311f650"
+    },
+    {
+      "path": "traversal-budget-test.mjs",
+      "bytes": 9206,
+      "sha256": "5c72e60b0479afee798bb80ef47b13f6abfa0ff64fde38c85434726a793b9ccd"
+    },
+    {
+      "path": "uia-diag.mjs",
+      "bytes": 1754,
+      "sha256": "608749cbd8237a614c3ba6d417a7a02156c92f85ccf9786ed3ed7cc997227809"
+    },
+    {
+      "path": "verify-disposer-contract.mjs",
+      "bytes": 1323,
+      "sha256": "8da6730ca1ea4dd1cdf9583d0634d01f347365623a30d1999a0193c04862ddb9"
+    },
+    {
+      "path": "visual-preferences-route-test.mjs",
+      "bytes": 8391,
+      "sha256": "387c9707b57439ff713874cafb5dcb95bd7e74f3bb68485278f74588094ce004"
+    },
+    {
+      "path": "visual-preferences-test.mjs",
+      "bytes": 7200,
+      "sha256": "789e33264402de8c1621234eeef91f55b3762056447b70073c8bfd9eacf044f7"
+    },
+    {
+      "path": "wait-and-capture-test.mjs",
+      "bytes": 18476,
+      "sha256": "0d04acec705ecd077e5fc5b301b21e253f0b561fb884c26dd5cc33eee84ca644"
+    }
+  ]
+}

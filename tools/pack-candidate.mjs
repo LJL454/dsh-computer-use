@@ -100,7 +100,11 @@ try {
 const identity = buildReleaseIdentity(PLUGIN);
 
 /** Directory names that are products of running the project, never inputs to a release. */
-const SKIP_DIRS = new Set(['node_modules', 'dist', 'artifacts', '.git', '_zips', 'coverage', '.cache']);
+// 方案五.6：发行包只该带**运行时需要**的东西。`.verify-shots`（16 张验证截图）在原包里占
+// 27,559,308 字节原始 / 27,205,155 字节压缩载荷，约整包 60%；`baseline`、`*.obj` 同属诊断附件。
+// 去掉它们之后包从 ~44.8 MB 降到 ~17.6 MB —— 这不影响稳态内存或 CPU，只降低下载、解包与扫描负担。
+const SKIP_DIRS = new Set(['node_modules', 'dist', 'artifacts', '.git', '_zips', 'coverage', '.cache',
+  '.verify-shots', 'baseline']);
 /** File names that are previous releases or packer scratch. */
 const ARTIFACT_SUFFIXES = ['.zip', '.tgz', '.tar', '.gz', '.7z', '.sha256', '.sha256.txt'];
 const ARTIFACT_NAMES = new Set([MANIFEST_NAME]);

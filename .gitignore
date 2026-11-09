@@ -1,4 +1,4 @@
-# Build and packaging output
+﻿# Build and packaging output
 dist/
 *.zip
 *.tgz
@@ -30,3 +30,11 @@ _live-out.txt
 
 # Never in the repo
 node_modules/
+
+# 本地验证截图（几十 MB，不入库）
+.verify-shots/
+
+# 原生编译中间件
+*.obj
+*.pdb
+*.ilk
