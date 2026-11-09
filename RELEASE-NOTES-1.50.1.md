@@ -7,7 +7,7 @@
 | | |
 |---|---|
 | 版本 | `1.50.1`（沿用版本号，用 `releaseBuildId` 区分构建） |
-| releaseBuildId | `a21c97a4580ef7e1` |
+| releaseBuildId | `bd90e5fd81d8de4b` |
 | 发行包 | `local-dsh-computer-use-1.50.1.tgz` · 263 文件 / 15.3 MB |
 | 生产文件 | 98（1.40.3 为 94） |
 | 运行要求 | Windows · DSH `>=0.2.1-rc.2 <0.3.0` · Node `>=20` · `desktop` profile |
@@ -144,7 +144,7 @@ visualEffects:
 1. **必须重启宿主**：配置（`interactionIndicator` / `visualEffects`）在宿主启动时读取，运行中的进程不会热更。
 2. **覆盖层默认开启**（`interactionIndicator.enabled: true`）。如果它出问题，把它改成 `false` 再重启即可恢复原状——**电脑操作本身不依赖覆盖层**。
 3. **从 1.40.3 升上来**：`tokenGuard` / `appLaunch` 的配置键名不变，新增 `interactionIndicator` 与 `visualEffects` 两段。发行包已带编译好的 exe；要从源码构建需 Visual Studio Build Tools 跑 `native/indicator-helper/build.ps1`。
-4. **别只看版本号**：1.50.1 是一系列同版构建，用 `releaseBuildId` 或包 SHA256 判断"装的是不是这一版"。当前为 `a21c97a4580ef7e1`。
+4. **别只看版本号**：1.50.1 是一系列同版构建，用 `releaseBuildId` 或包 SHA256 判断"装的是不是这一版"。当前为 `bd90e5fd81d8de4b`。
 5. **安装**：解压后 `node setup.mjs`（会自动识别宿主布局并执行 `dsh plugin add`），或直接 `dsh plugin add <路径>`。
 6. **AMSI / Defender 拦截已解决**：误报样本已提交微软并修正特征，实测实时防护开启（特征库 `1.463.201.0`）下 worker 正常 `ready`。若你的机器上仍出现拦截：`doctor` 会给出 `blocked` 与 `BACKEND_BLOCKED_BY_AV`（附脚本 SHA256 与原始报错），处置同样是**提交误报样本**＋更新情报后用 `clearSecurityBlock()` 重试；不要关闭 AMSI，也不要加长期排除项。
 
